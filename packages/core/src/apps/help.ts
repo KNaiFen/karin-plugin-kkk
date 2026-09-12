@@ -1,9 +1,12 @@
-import karin, { config } from 'node-karin'
+import fs from 'node:fs'
 
-import { Render } from '@/module'
+import karin, { logs } from 'node-karin'
+
+import { Render, replyRenderedImages, Root } from '@/module'
 import { Config } from '@/module/utils/Config'
 import { wrapWithErrorHandler } from '@/module/utils/ErrorHandler'
-import { collectRuntimeReport, getLocalChangelog } from '@/module/utils/runtime-report'
+import { getNonConsoleMasters } from '@/module/utils/master'
+
 
 type Role = 'master' | 'member'
 type RoleItem = { title: string; description: string; icon?: string | { name: string; color?: string }; roles?: Role[] }
@@ -25,6 +28,12 @@ const HELP_MENU_CONFIG: RoleMenuGroup[] = [
           if (Config.bilibili?.switch) platforms.push('哔哩哔哩')
           if (Config.kuaishou?.switch) platforms.push('快手')
           if (Config.xiaohongshu?.switch) platforms.push('小红书')
+          if (Config.tiktok?.switch) platforms.push('TikTok')
+          if (Config.heybox?.switch) platforms.push('小黑盒')
+          if (Config.x?.switch) platforms.push('X')
+          if (Config.zhihu?.switch) platforms.push('知乎')
+          if (Config.tieba?.switch) platforms.push('贴吧')
+          if (Config.weibo?.switch) platforms.push('微博')
           return platforms.length > 0 ? `支持「${platforms.join('」「')}」` : '暂无可用平台'
         })(),
         icon: 'ph:link-fill',
@@ -122,14 +131,8 @@ const HELP_MENU_CONFIG: RoleMenuGroup[] = [
     title: '其他',
     items: [
       {
-        title: '#kkk版本',
-        description: '查看插件、Karin、Node.js、适配器与系统资源等运行环境诊断信息',
-        icon: 'ph:monitor-fill',
-        roles: ['member', 'master']
-      },
-      {
         title: '「#kkk更新日志」「#kkk更新」',
-        description: '查看更新日志或执行插件更新',
+        description: '字面意思~',
         icon: 'ph:arrows-clockwise-fill',
         roles: ['master']
       }
@@ -139,90 +142,76 @@ const HELP_MENU_CONFIG: RoleMenuGroup[] = [
 
 const buildMenuForRole = (role: Role) => {
   const filterItems = (items: RoleItem[] = []) =>
-    items.filter((i) => !i.roles || i.roles.includes(role)).map(({ title, description, icon }) => ({ title, description, icon }))
+    items.filter(i => !i.roles || i.roles.includes(role))
+      .map(({ title, description, icon }) => ({ title, description, icon }))
 
-  return HELP_MENU_CONFIG.map((group) => {
-    const items = filterItems(group.items)
-    const subGroups = group.subGroups?.map((sg) => ({ title: sg.title, items: filterItems(sg.items) })).filter((s) => s.items.length > 0)
+  return HELP_MENU_CONFIG
+    .map(group => {
+      const items = filterItems(group.items)
+      const subGroups = group.subGroups
+        ?.map(sg => ({ title: sg.title, items: filterItems(sg.items) }))
+        .filter(s => s.items.length > 0)
 
-    return { title: group.title, items, subGroups }
-  }).filter((g) => g.items.length > 0 || (g.subGroups && g.subGroups.length > 0))
+      return { title: group.title, items, subGroups }
+    })
+    .filter(g => (g.items.length > 0) || (g.subGroups && g.subGroups.length > 0))
 }
 
 // 包装帮助命令
-const handleHelp = wrapWithErrorHandler(
-  async (e) => {
-    const masters = config.master().filter((id) => id !== 'console')
-    const isMaster = !!e.sender && masters.includes(e.sender.userId)
-    const role: Role = isMaster ? 'master' : 'member'
-    const menu = buildMenuForRole(role)
+const handleHelp = wrapWithErrorHandler(async (e) => {
+  const masters = getNonConsoleMasters()
+  const isMaster = !!e.sender && masters.includes(e.sender.userId)
+  const role: Role = isMaster ? 'master' : 'member'
+  const menu = buildMenuForRole(role)
 
-    // 将 menu 转换为 list 供前端渲染
-    const list = menu.flatMap((group) => {
-      const groupItems = group.items.map((item) => ({
+  // 将 menu 转换为 list 供前端渲染
+  const list = menu.flatMap(group => {
+    const groupItems = group.items.map(item => ({
+      title: item.title,
+      description: item.description
+    }))
+    const subItems = group.subGroups?.flatMap(sg =>
+      sg.items.map(item => ({
         title: item.title,
         description: item.description
       }))
-      const subItems =
-        group.subGroups?.flatMap((sg) =>
-          sg.items.map((item) => ({
-            title: item.title,
-            description: item.description
-          }))
-        ) || []
-      return [...groupItems, ...subItems]
-    })
+    ) || []
+    return [...groupItems, ...subItems]
+  })
 
-    const img = await Render(e, 'other/help', {
-      title: 'KKK插件帮助页面',
-      menu,
-      list,
-      role
-    })
-    await e.reply(img)
-    return true
-  },
-  {
-    businessName: 'KKK帮助'
-  }
-)
+  const img = await Render(e, 'other/help', {
+    title: 'KKK插件帮助页面',
+    menu,
+    list,
+    role
+  })
+  await replyRenderedImages(e, img)
+  return true
+}, {
+  businessName: 'KKK帮助'
+})
 
 // 包装版本命令
-const handleVersion = wrapWithErrorHandler(
-  async (e) => {
-    const img = await Render(e, 'other/runtime', collectRuntimeReport(e))
-    await e.reply(img)
-    return true
-  },
-  {
-    businessName: 'KKK版本'
-  }
-)
+const handleVersion = wrapWithErrorHandler(async (e) => {
+  const changelogContent = fs.readFileSync(Root.pluginPath + '/CHANGELOG.md', 'utf8')
+  const forwardLogs = logs({
+    version: Root.pluginVersion,
+    data: changelogContent,
+    length: 10
+  })
 
-// 包装更新日志命令
-const handleChangelog = wrapWithErrorHandler(
-  async (e) => {
-    const forwardLogs = getLocalChangelog(10)
-    if (!forwardLogs) {
-      throw new Error('当前构建未携带可用的 CHANGELOG.md')
-    }
-
-    const img = await Render(e, 'other/changelog', {
-      markdown: forwardLogs,
-      Tip: false,
-      localVersion: '',
-      remoteVersion: ''
-    })
-    await e.reply(img)
-    return true
-  },
-  {
-    businessName: 'KKK更新日志'
-  }
-)
+  const img = await Render(e, 'other/changelog', {
+    markdown: forwardLogs,
+    Tip: false,
+    localVersion: '',
+    remoteVersion: ''
+  })
+  await replyRenderedImages(e, img)
+  return true
+}, {
+  businessName: 'KKK版本'
+})
 
 export const help = karin.command(/^#?kkk帮助$/, handleHelp, { name: 'kkk-帮助' })
 
-export const version = karin.command(/^#?kkk版本$/, handleVersion, { name: 'kkk-版本' })
-
-export const changelog = karin.command(/^#?kkk更新日志$/, handleChangelog, { name: 'kkk-更新日志' })
+export const version = karin.command(/^#?kkk(版本|更新日志)$/, handleVersion, { name: 'kkk-版本' })

@@ -1,19 +1,28 @@
 packages:
   - packages/*
   - packages/amagi/packages/core
+  - Karin/packages/*
+  - Karin
+  - '!packages/next-web'
 
-overrides:
-  node-karin: 1.16.2
-  typescript: 6.0.3
-  vite: 8.1.4
+onlyBuiltDependencies:
+  - '@heroui/shared-utils'
+  - '@karinjs/sqlite3-cjs'
+  - '@parcel/watcher'
+  - '@swc/core'
+  - cwebp-bin
+  - dtrace-provider
+  - esbuild
+  - gifsicle
+  - javascript-obfuscator
+  - jpegtran-bin
+  - mozjpeg
+  - optipng-bin
+  - pngquant-bin
+  - protobufjs
+  - sharp
+  - unrs-resolver
 
 publicHoistPattern:
   - '*sqlite3*'
   - '*express*'
-
-minimumReleaseAge: 0
-
-allowBuilds:
-  '@swc/core': true
-  esbuild: true
-  sharp: true

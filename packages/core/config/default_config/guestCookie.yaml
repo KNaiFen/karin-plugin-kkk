@@ -1,0 +1,113 @@
+# 游客 Cookie 自动获取总开关
+switch: true
+
+# 定时刷新基础间隔，单位：小时
+refreshIntervalHours: 12
+
+# 定时刷新随机抖动，单位：分钟。实际刷新时间为「基础间隔 ± 随机抖动」
+refreshJitterMinutes: 60
+
+# 解析前认为自动 Cookie 过期的时间，单位：小时
+minRefreshAgeHours: 6
+
+# HTTP 回退获取超时时间，单位：秒
+httpTimeoutSeconds: 20
+
+# 浏览器获取超时时间，单位：秒
+browserTimeoutSeconds: 30
+
+# 游客页面加载完成后的等待时间，单位：秒
+pageSettleSeconds: 3
+
+# 浏览器获取时是否拦截媒体资源，降低加载开销
+blockMedia: true
+
+# 浏览器获取时是否拦截字体资源，降低加载开销
+blockFont: true
+
+# 游客 Cookie 持久化日志配置
+logging:
+  # 是否启用持久化日志
+  switch: true
+  # 日志保留天数
+  retentionDays: 30
+  # 单个日志文件最大大小，单位：MB，超过后会按序号轮转
+  maxFileSizeMB: 10
+
+# 抖音游客 Cookie 获取配置
+douyin:
+  # 是否启用抖音游客 Cookie 自动获取
+  switch: true
+  # 抖音游客访问页面
+  pageUrl: 'https://www.douyin.com/jingxuan?enter=guide'
+  # 抖音解析测试链接，仅用于手动验证，不会自动定时请求
+  testUrl: 'https://v.douyin.com/pGDQzKiWtBM/'
+  # 判断抖音 Cookie 是否完整时必须包含的 Cookie 名
+  requiredCookies:
+    - ttwid
+    - s_v_web_id
+
+# 小红书游客 Cookie 获取配置
+xiaohongshu:
+  # 是否启用小红书游客 Cookie 自动获取
+  switch: true
+  # 小红书游客访问页面
+  pageUrl: 'https://www.xiaohongshu.com/explore'
+  # 小红书解析测试链接，仅用于手动验证，不会自动定时请求
+  testUrl: 'http://xhslink.cn/o/1wPOQ9a9RyI'
+  # 判断小红书 Cookie 是否完整时必须包含的 Cookie 名
+  requiredCookies:
+    - a1
+    - webId
+    - web_session
+
+# TikTok 游客 Cookie 获取配置
+tiktok:
+  # 是否启用 TikTok 游客 Cookie 自动获取
+  switch: true
+  # TikTok 游客访问页面
+  pageUrl: 'https://www.tiktok.com/'
+  # TikTok 解析测试链接，仅用于手动验证，不会自动定时请求
+  testUrl: 'https://vt.tiktok.com/ZSxVY1Gos/'
+  # 判断 TikTok Cookie 是否完整时必须包含的 Cookie 名
+  requiredCookies:
+    - ttwid
+    - msToken
+
+# 小黑盒游客 Token 获取配置
+heybox:
+  # 是否启用小黑盒游客 Token 自动获取
+  switch: true
+  # 小黑盒游客访问页面
+  pageUrl: 'https://www.xiaoheihe.cn/'
+  # 小黑盒解析测试链接，仅用于手动验证，不会自动定时请求
+  testUrl: 'https://www.xiaoheihe.cn/app/bbs/link/4a9471857e40'
+  # 判断小黑盒 Cookie 是否完整时必须包含的 Cookie 名
+  requiredCookies:
+    - x_xhh_tokenid
+
+# 知乎游客 Cookie 获取配置
+zhihu:
+  # 是否启用知乎游客 Cookie 自动获取
+  switch: true
+  # 知乎游客访问页面
+  pageUrl: 'https://www.zhihu.com/'
+  # 知乎解析测试链接，仅用于手动验证，不会自动定时请求
+  testUrl: 'https://www.zhihu.com/question/19550283/answer/122329247'
+  # 判断知乎 Cookie 是否完整时必须包含的 Cookie 名
+  requiredCookies:
+    - _zap
+    - d_c0
+
+# 微博游客 Cookie 获取配置
+weibo:
+  # 是否启用微博游客 Cookie 自动获取
+  switch: true
+  # 微博游客访问页面
+  pageUrl: 'https://m.weibo.cn/'
+  # 微博解析测试链接，仅用于手动验证，不会自动定时请求
+  testUrl: 'https://weibo.com/5955106173/R2YQog7Pb'
+  # 判断微博 Cookie 是否完整时必须包含的 Cookie 名
+  requiredCookies:
+    - SUB
+    - SUBP

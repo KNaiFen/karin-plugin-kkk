@@ -1,121 +1,124 @@
 import fs from 'node:fs'
+import path from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 
-import { logger, watch } from 'node-karin'
+import { copyConfigSync, filesByExt, logger, watch } from 'node-karin'
 import { karinPathBase } from 'node-karin/root'
 import YAML from 'node-karin/yaml'
 
 import type { ConfigType } from '@/types'
-import type { bilibiliPushItem, douyinPushItem } from '@/types/config/pushlist'
+import type { bilibiliPushItem, douyinPushItem, pushlistConfig } from '@/types/config/pushlist'
 
 import { Root } from '../../root'
+import { mergeConfigObjects, normalizeDottedConfigObject } from './configPath'
+
 
 type ConfigDirType = 'config' | 'default_config'
+type ConfigSnapshot = Partial<{ [K in keyof ConfigType]: ConfigType[K] }>
 
 class Cfg {
+  private readonly legacyAppKeys = ['APIServer', 'APIServerPort', 'APIServerMount'] as const
+
   /** 用户配置文件路径 */
   private dirCfgPath: string
   /** 默认配置文件路径 */
   private defCfgPath: string
-  /** JSON 配置文件路径 */
-  private get jsonConfigPath() {
-    return `${this.dirCfgPath}/config.json`
-  }
-  private get defJsonConfigPath() {
-    return `${this.defCfgPath}/config.json`
-  }
+  /** 默认配置与用户配置合并后的只读来源快照 */
+  private mergedSnapshot: ConfigSnapshot = {}
+  /** 串行执行带回滚的配置事务，避免失败事务覆盖后续成功写入 */
+  private modifyProQueue: Promise<void> = Promise.resolve()
+  /** 串行执行订阅同步，确保较新的配置最终写入数据库 */
+  private configSyncQueue: Promise<void> = Promise.resolve()
 
-  constructor() {
+  constructor () {
     this.dirCfgPath = `${karinPathBase}/${Root.pluginName}/config`
     this.defCfgPath = `${Root.pluginPath}/config/default_config/`
   }
 
   /** 初始化配置 */
-  initCfg() {
-    // 1. 确保用户配置目录存在
-    if (!fs.existsSync(this.dirCfgPath)) {
-      fs.mkdirSync(this.dirCfgPath, { recursive: true })
-    }
+  initCfg () {
+    copyConfigSync(this.defCfgPath, this.dirCfgPath)
 
-    // 2. 如果用户没有 config.json 且没有 YAML 文件，复制默认配置（全新安装）
-    const hasJson = fs.existsSync(this.jsonConfigPath)
-    const hasYaml = ['app', 'bilibili', 'cookies', 'douyin', 'kuaishou', 'pushlist', 'request', 'upload', 'xiaohongshu'].some((name) =>
-      fs.existsSync(`${this.dirCfgPath}/${name}.yaml`)
-    )
+    const files = filesByExt(this.dirCfgPath, '.yaml', 'name')
+    for (const file of files) {
+      const config = YAML.parseDocument(fs.readFileSync(`${this.dirCfgPath}/${file}`, 'utf8'))
+      const defConfig = YAML.parseDocument(fs.readFileSync(`${this.defCfgPath}/${file}`, 'utf8'))
+      let differences = false
 
-    if (!hasJson && !hasYaml && fs.existsSync(this.defJsonConfigPath)) {
-      fs.copyFileSync(this.defJsonConfigPath, this.jsonConfigPath)
-    }
+      if (file === 'app.yaml') {
+        differences = this.removeLegacyAppConfigKeys(config.contents) || differences
+      }
 
-    // 3. 合并默认配置（处理新增字段）
-    if (fs.existsSync(this.jsonConfigPath) && fs.existsSync(this.defJsonConfigPath)) {
-      const userConfig = this.getJson()
-      const defConfig = JSON.parse(fs.readFileSync(this.defJsonConfigPath, 'utf8'))
-      const merged = this.mergeJsonConfigs(defConfig, userConfig)
-      if (JSON.stringify(merged) !== JSON.stringify(userConfig)) {
-        this.setJson(merged)
+      const merged = this.mergeObjectsWithPriority(config, defConfig)
+      differences = merged.differences || differences
+      const { result } = merged
+
+      if (file === 'app.yaml' && YAML.isMap(result.contents)) {
+        const summaryParseNode = result.contents.get('summaryParse', true)
+        if (YAML.isMap(summaryParseNode) && summaryParseNode.has('prompt')) {
+          differences = true
+          summaryParseNode.delete('prompt')
+        }
+        differences = this.removeLegacyAppConfigKeys(result.contents) || differences
+      }
+
+      if (differences) {
+        fs.writeFileSync(`${this.dirCfgPath}/${file}`, result.toString({ lineWidth: -1 }))
       }
     }
 
-    // 4. 监听 config.json 变化
-    setTimeout(() => {
-      if (fs.existsSync(this.jsonConfigPath)) {
-        watch(this.jsonConfigPath, (old, now) => {
-          // @ts-ignore
-          if (old?.amagi !== now?.amagi) {
-            logger.debug('[karin-plugin-kkk][Config] 检测到 amagi 配置变化，正在重载 Amagi Client...')
-            import('./amagiClient')
-              .then(({ reloadAmagiConfig }) => reloadAmagiConfig())
-              .catch((error) => logger.error(`[karin-plugin-kkk][Config] 重载 Amagi Client 失败: ${error}`))
-          }
+    this.rebuildSnapshot(true)
+
+    let amagiReloadTimer: ReturnType<typeof setTimeout> | undefined
+    const scheduleAmagiReload = (fileName: string) => {
+      if (amagiReloadTimer) clearTimeout(amagiReloadTimer)
+      amagiReloadTimer = setTimeout(() => {
+        logger.debug(`[Config] 检测到 ${fileName} 配置变化，正在重载 Amagi Client...`)
+        import('../utils/amagiClient').then(({ reloadAmagiConfig }) => {
+          reloadAmagiConfig()
+        }).catch((error) => {
+          logger.error(`[Config] 重载 Amagi Client 失败: ${error}`)
         })
-      }
+      }, 500)
+    }
+
+    /**
+     * @description 监听配置文件
+     */
+    setTimeout(() => {
+      const list = filesByExt(this.dirCfgPath, '.yaml', 'abs')
+      list.forEach((file) => watch(file, (_old, _now) => {
+        const fileName = path.basename(file, '.yaml')
+        if (!this.rebuildSnapshot(false)) return
+
+        // 检查是否是 cookies 或 request 配置文件变化
+        if (fileName === 'cookies' || fileName === 'request') {
+          scheduleAmagiReload(fileName)
+        }
+      }))
     }, 2000)
 
     return this
   }
 
-  /** 读取 JSON 配置 */
-  private getJson(): any {
-    return JSON.parse(fs.readFileSync(this.jsonConfigPath, 'utf8'))
-  }
-
-  /** 写入 JSON 配置 */
-  private setJson(config: any) {
-    fs.writeFileSync(this.jsonConfigPath, JSON.stringify(config, null, 2), 'utf8')
-  }
-
-  /** 深度合并 JSON 配置（保留用户值，补充默认值） */
-  private mergeJsonConfigs(def: any, user: any): any {
-    if (!def || typeof def !== 'object' || Array.isArray(def)) return user ?? def
-    if (!user || typeof user !== 'object' || Array.isArray(user)) return user ?? def
-
-    const result: any = { ...def }
-    for (const key in user) {
-      if (typeof user[key] === 'object' && !Array.isArray(user[key]) && user[key] !== null) {
-        result[key] = this.mergeJsonConfigs(def[key], user[key])
-      } else {
-        result[key] = user[key]
-      }
-    }
-    return result
-  }
-
   /**
-   * 获取配置
-   * @param name 配置键名
+   * 获取默认配置和用户配置
+   * @param name 配置文件名
+   * @returns 返回合并后的配置
    */
-  getDefOrConfig(name: keyof ConfigType) {
-    const config = this.getJson()
-    return config[name] || {}
+  getDefOrConfig<T extends keyof ConfigType> (name: T): ConfigType[T] {
+    const value = this.mergedSnapshot[name]
+    if (value === undefined) throw new Error(`[Config] 配置模块 ${String(name)} 不存在`)
+    return this.cloneValue(value) as ConfigType[T]
   }
 
   /** 获取所有配置文件 */
-  async All(): Promise<ConfigType> {
+  async All (): Promise<ConfigType> {
     const { getDouyinDB, getBilibiliDB } = await import('../db')
     const douyinDB = await getDouyinDB()
     const bilibiliDB = await getBilibiliDB()
 
-    const allConfig: any = this.getJson()
+    const allConfig = this.cloneValue(this.mergedSnapshot) as ConfigType
 
     // 从数据库获取过滤配置并合并到推送列表中
     if (allConfig.pushlist) {
@@ -125,9 +128,7 @@ class Cfg {
             const filterWords = await douyinDB.getFilterWords(item.sec_uid)
             const filterTags = await douyinDB.getFilterTags(item.sec_uid)
             const userInfo = await douyinDB.getDouyinUser(item.sec_uid)
-            if (userInfo) {
-              item.filterMode = (userInfo.filterMode as 'blacklist' | 'whitelist') || 'blacklist'
-            }
+            if (userInfo) item.filterMode = (userInfo.filterMode as 'blacklist' | 'whitelist' || 'blacklist') || 'blacklist'
             item.Keywords = filterWords
             item.Tags = filterTags
           }
@@ -137,9 +138,7 @@ class Cfg {
             const filterWords = await bilibiliDB.getFilterWords(item.host_mid)
             const filterTags = await bilibiliDB.getFilterTags(item.host_mid)
             const userInfo = await bilibiliDB.getOrCreateBilibiliUser(item.host_mid)
-            if (userInfo) {
-              item.filterMode = (userInfo.filterMode as 'blacklist' | 'whitelist') || 'blacklist'
-            }
+            if (userInfo) item.filterMode = (userInfo.filterMode as 'blacklist' | 'whitelist' || 'blacklist') || 'blacklist'
             item.Keywords = filterWords
             item.Tags = filterTags
           }
@@ -152,85 +151,204 @@ class Cfg {
     return allConfig as ConfigType
   }
 
+  private cloneValue<T> (value: T): T {
+    return value === undefined ? value : structuredClone(value)
+  }
+
+  private getConfigFilePath (type: ConfigDirType, name: keyof ConfigType): string {
+    const directory = type === 'config' ? this.dirCfgPath : this.defCfgPath
+    return path.join(directory, `${name}.yaml`)
+  }
+
+  private readConfigFile<T extends keyof ConfigType> (
+    type: ConfigDirType,
+    name: T,
+    optional: boolean
+  ): ConfigType[T] | Record<string, never> {
+    const filePath = this.getConfigFilePath(type, name)
+
+    try {
+      const parsed = YAML.parse(fs.readFileSync(filePath, 'utf8')) as unknown
+      if (parsed === null || parsed === undefined) return {}
+      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('配置文件顶层必须是对象')
+      }
+      return normalizeDottedConfigObject(parsed) as ConfigType[T]
+    } catch (error) {
+      if (optional && (error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        return {}
+      }
+
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`[Config] 无法解析配置文件 ${filePath}: ${message}`)
+    }
+  }
+
+  private buildSnapshot (): ConfigSnapshot {
+    const merged: ConfigSnapshot = {}
+    const files = fs.readdirSync(this.defCfgPath)
+      .filter(file => file.endsWith('.yaml'))
+
+    for (const file of files) {
+      const name = path.basename(file, '.yaml') as keyof ConfigType
+      const defaults = this.readConfigFile('default_config', name, false)
+      const userConfig = this.readConfigFile('config', name, true)
+
+      merged[name] = mergeConfigObjects(defaults, userConfig) as never
+    }
+
+    return merged
+  }
+
+  private rebuildSnapshot (throwOnError: boolean): boolean {
+    try {
+      this.mergedSnapshot = this.buildSnapshot()
+      return true
+    } catch (error) {
+      if (throwOnError) throw error
+      logger.error(error instanceof Error ? error.message : String(error))
+      return false
+    }
+  }
+
   /**
-   * 修改整个配置文件
+   * 修改配置文件
+   * @param name 文件名
+   * @param key 键
+   * @param value 值
+   * @param type 配置文件类型，默认为用户配置文件 `config`
+   */
+  Modify (
+    name: keyof ConfigType,
+    key: string,
+    value: any,
+    type: ConfigDirType = 'config'
+  ) {
+    const filePath =
+      type === 'config'
+        ? `${this.dirCfgPath}/${name}.yaml`
+        : `${this.defCfgPath}/${name}.yaml`
+
+    // 读取 YAML 文件
+    const yamlData = YAML.parseDocument(fs.readFileSync(filePath, 'utf8'))
+
+    // 处理嵌套路径
+    const keys = key.split('.')
+    yamlData.setIn(keys, value)
+
+    const existingContent = fs.readFileSync(filePath, 'utf8')
+    const nextContent = yamlData.toString({ lineWidth: -1 })
+    fs.writeFileSync(filePath, nextContent, 'utf8')
+    try {
+      this.rebuildSnapshot(true)
+    } catch (error) {
+      fs.writeFileSync(filePath, existingContent, 'utf8')
+      throw error
+    }
+  }
+
+  /**
+   * 修改整个配置文件，保留注释
    * @param name 文件名
    * @param config 完整的配置对象
+   * @param type 配置文件类型，默认为用户配置文件 `config`
    */
-  async ModifyPro<T extends keyof ConfigType>(name: T, config: ConfigType[T], type: ConfigDirType = 'config') {
-    if (type !== 'config') return false
-
-    const { getDouyinDB, getBilibiliDB } = await import('../db')
-    const douyinDB = await getDouyinDB()
-    const bilibiliDB = await getBilibiliDB()
-
-    const jsonConfig = this.getJson()
-    jsonConfig[name] = config
-    this.setJson(jsonConfig)
-
-    // 同步到数据库
-    if ('douyin' in config) {
-      await this.syncFilterConfigToDb(config.douyin as douyinPushItem[], douyinDB, 'sec_uid')
-      logger.debug('[karin-plugin-kkk][Config] 已同步抖音过滤配置到数据库')
-    }
-    if ('bilibili' in config) {
-      await this.syncFilterConfigToDb(config.bilibili as bilibiliPushItem[], bilibiliDB, 'host_mid')
-      logger.debug('[karin-plugin-kkk][Config] 已同步B站过滤配置到数据库')
-    }
-    return true
+  ModifyPro<T extends keyof ConfigType> (
+    name: T,
+    config: ConfigType[T],
+    type: ConfigDirType = 'config'
+  ) {
+    const operation = this.modifyProQueue
+      .catch(() => undefined)
+      .then(() => this.runModifyPro(name, config, type))
+    this.modifyProQueue = operation.then(
+      () => undefined,
+      () => undefined
+    )
+    return operation
   }
 
-  /**
-   * 修改配置字段（支持深层嵌套路径，包括数组索引）
-   * @param moduleName 模块名
-   * @param path 字段路径，如 'push.switch' 或 'cookies.douyin' 或 'list[0].name'
-   * @param value 新值
-   */
-  async Modify<T extends keyof ConfigType>(moduleName: T, path: string, value: any) {
-    const jsonConfig = this.getJson()
-    const pathKeys = this.parsePath(path)
+  private async runModifyPro<T extends keyof ConfigType> (
+    name: T,
+    config: ConfigType[T],
+    type: ConfigDirType
+  ) {
+    const filePath =
+      type === 'config'
+        ? `${this.dirCfgPath}/${name}.yaml`
+        : `${this.defCfgPath}/${name}.yaml`
 
-    // 导航到目标对象
-    let target: any = jsonConfig[moduleName]
-    for (let i = 0; i < pathKeys.length - 1; i++) {
-      const key = pathKeys[i]
-      if (!(key in target)) {
-        target[key] = {}
+    try {
+      // 1. 读取现有文件（包含注释）
+      const existingContent = fs.readFileSync(filePath, 'utf8')
+      const doc = YAML.parseDocument(existingContent)
+
+      // 2. 将新配置转换为YAML节点（不解析注释）
+      let filterCfg = config
+      if (name === 'pushlist' && config && typeof config === 'object' && ('douyin' in config || 'bilibili' in config)) {
+        const cleanedConfig = { ...config } as pushlistConfig
+
+        // 处理抖音配置
+        if ('douyin' in cleanedConfig) {
+          cleanedConfig.douyin = cleanedConfig.douyin.map(item => {
+            const { Keywords, Tags, filterMode, ...rest } = item
+            return rest as Omit<douyinPushItem, 'Keywords' | 'Tags' | 'filterMode'>
+          })
+        }
+
+        // 处理B站配置
+        if ('bilibili' in cleanedConfig) {
+          cleanedConfig.bilibili = cleanedConfig.bilibili.map(item => {
+            const { Keywords, Tags, filterMode, ...rest } = item
+            return rest as Omit<bilibiliPushItem, 'Keywords' | 'Tags' | 'filterMode'>
+          })
+        }
+
+        filterCfg = cleanedConfig as ConfigType[T]
       }
-      target = target[key]
+
+      const newConfigNode = YAML.parseDocument(YAML.stringify(filterCfg)).contents
+
+      // 3. 深度合并新配置到现有文档（保留注释结构）
+      this.deepMergeYaml(doc.contents, newConfigNode)
+      if (name === 'app' && YAML.isMap(doc.contents)) {
+        doc.contents.delete('multiPageHeight')
+        for (const legacyKey of this.legacyAppKeys) {
+          doc.contents.delete(legacyKey)
+        }
+      }
+
+      // 4. 写回文件；快照重建或数据库同步失败时恢复原内容与快照。
+      const nextContent = doc.toString({ lineWidth: -1 })
+      fs.writeFileSync(filePath, nextContent, 'utf8')
+      try {
+        this.rebuildSnapshot(true)
+
+        if (name === 'pushlist' && type === 'config') {
+          // 只有请求明确提交的推送平台才同步过滤配置。
+          const submitted = config as ConfigType['pushlist']
+          const { getDouyinDB, getBilibiliDB } = await import('../db')
+          if (Object.hasOwn(submitted, 'douyin')) {
+            const douyinDB = await getDouyinDB()
+            await this.syncFilterConfigToDb(submitted.douyin, douyinDB, 'sec_uid')
+            logger.debug('已同步抖音过滤配置到数据库')
+          }
+          if (Object.hasOwn(submitted, 'bilibili')) {
+            const bilibiliDB = await getBilibiliDB()
+            await this.syncFilterConfigToDb(submitted.bilibili, bilibiliDB, 'host_mid')
+            logger.debug('已同步B站过滤配置到数据库')
+          }
+        }
+      } catch (error) {
+        this.rollbackModifyProConfig(filePath, existingContent, nextContent, filterCfg)
+        this.rebuildSnapshot(true)
+        throw error
+      }
+      return true
+    } catch (error) {
+      logger.error(`修改配置文件时发生错误：${error}`)
+      return false
     }
-
-    // 设置值
-    const lastKey = pathKeys[pathKeys.length - 1]
-    target[lastKey] = value
-
-    // 保存
-    this.setJson(jsonConfig)
-
-    // 同步数据库
-    if (moduleName === 'pushlist') {
-      const { getDouyinDB, getBilibiliDB } = await import('../db')
-      const douyinDB = await getDouyinDB()
-      const bilibiliDB = await getBilibiliDB()
-
-      if ('douyin' in jsonConfig[moduleName]) {
-        await this.syncFilterConfigToDb(jsonConfig[moduleName].douyin, douyinDB, 'sec_uid')
-      }
-      if ('bilibili' in jsonConfig[moduleName]) {
-        await this.syncFilterConfigToDb(jsonConfig[moduleName].bilibili, bilibiliDB, 'host_mid')
-      }
-    }
-
-    return true
-  }
-
-  /**
-   * 解析路径字符串，支持点号和数组索引
-   * 'a.b.c' => ['a', 'b', 'c']
-   * 'a[0].b' => ['a', '0', 'b']
-   */
-  private parsePath(path: string): string[] {
-    return path.replace(/\[(\d+)\]/g, '.$1').split('.')
   }
 
   /**
@@ -239,22 +357,28 @@ class Cfg {
    * @param db 数据库实例
    * @param idField ID字段名称
    */
-  private async syncFilterConfigToDb(items: any[], db: any, idField: string) {
+  private async syncFilterConfigToDb (items: any[], db: any, idField: string) {
     for (const item of items) {
       const id = item[idField]
       if (!id) continue
 
+      // 更新过滤模式
       if (item.filterMode) {
         await db.updateFilterMode(id, item.filterMode)
       }
 
+      // 更新过滤词
       if (item.Keywords && Array.isArray(item.Keywords)) {
         const existingWords = await db.getFilterWords(id)
+
+        // 删除不再需要的过滤词
         for (const word of existingWords) {
           if (!item.Keywords.includes(word)) {
             await db.removeFilterWord(id, word)
           }
         }
+
+        // 添加新的过滤词
         for (const word of item.Keywords) {
           if (!existingWords.includes(word)) {
             await db.addFilterWord(id, word)
@@ -262,13 +386,18 @@ class Cfg {
         }
       }
 
+      // 更新过滤标签
       if (item.Tags && Array.isArray(item.Tags)) {
         const existingTags = await db.getFilterTags(id)
+
+        // 删除不再需要的过滤标签
         for (const tag of existingTags) {
           if (!item.Tags.includes(tag)) {
             await db.removeFilterTag(id, tag)
           }
         }
+
+        // 添加新的过滤标签
         for (const tag of item.Tags) {
           if (!existingTags.includes(tag)) {
             await db.addFilterTag(id, tag)
@@ -279,42 +408,212 @@ class Cfg {
   }
 
   /**
-   * 同步配置到数据库
+   * 深度合并YAML节点（保留目标注释）
+   * @param target 目标节点（保留注释的原始节点）
+   * @param source 源节点（提供新值的节点）
    */
-  async syncConfigToDatabase() {
-    try {
-      const { getDouyinDB, getBilibiliDB } = await import('../db')
-      const douyinDB = await getDouyinDB()
-      const bilibiliDB = await getBilibiliDB()
+  private deepMergeYaml (target: any, source: any) {
+    if (YAML.isMap(target) && YAML.isMap(source)) {
+      for (const pair of source.items) {
+        const key = pair.key
+        const sourceVal = pair.value
+        const targetVal = target.get(key)
 
-      const config = this.getJson()
-      const pushCfg = config.pushlist
-
-      if (pushCfg?.bilibili) await bilibiliDB.syncConfigSubscriptions(pushCfg.bilibili)
-      if (pushCfg?.douyin) await douyinDB.syncConfigSubscriptions(pushCfg.douyin)
-      logger.debug('[karin-plugin-kkk][BilibiliDB] + [DouyinDB] 配置已同步到数据库')
-    } catch (error) {
-      logger.error('[karin-plugin-kkk]同步配置到数据库失败:', error)
+        if (targetVal === undefined) {
+          target.set(key, sourceVal)
+        } else if (YAML.isMap(targetVal) && YAML.isMap(sourceVal)) {
+          this.deepMergeYaml(targetVal, sourceVal)
+        } else if (YAML.isSeq(targetVal) && YAML.isSeq(sourceVal)) {
+          // 替换序列内容并保持源序列格式
+          targetVal.items = sourceVal.items
+          // 同步序列的显示格式
+          targetVal.flow = sourceVal.flow
+        } else {
+          target.set(key, sourceVal)
+        }
+      }
     }
+  }
+
+  /**
+   * 回滚失败事务自身尚未被后续写入覆盖的字段。
+   * 后续同步写入可能已经基于本次内容更新了其他平台，不能整体恢复旧文件。
+   */
+  private rollbackModifyProConfig (
+    filePath: string,
+    existingContent: string,
+    nextContent: string,
+    changedConfig: unknown
+  ) {
+    const currentContent = fs.readFileSync(filePath, 'utf8')
+    if (currentContent === nextContent) {
+      fs.writeFileSync(filePath, existingContent, 'utf8')
+      return
+    }
+    if (!changedConfig || typeof changedConfig !== 'object' || Array.isArray(changedConfig)) return
+
+    const previousConfig = YAML.parse(existingContent) as Record<string, unknown>
+    const nextConfig = YAML.parse(nextContent) as Record<string, unknown>
+    const currentConfig = YAML.parse(currentContent) as Record<string, unknown>
+    const currentDoc = YAML.parseDocument(currentContent)
+    if (!YAML.isMap(currentDoc.contents)) return
+
+    let restored = false
+    for (const key of Object.keys(changedConfig)) {
+      if (!isDeepStrictEqual(currentConfig[key], nextConfig[key])) continue
+
+      if (Object.hasOwn(previousConfig, key)) {
+        currentDoc.set(key, previousConfig[key])
+      } else {
+        currentDoc.delete(key)
+      }
+      restored = true
+    }
+
+    if (restored) {
+      fs.writeFileSync(filePath, currentDoc.toString({ lineWidth: -1 }), 'utf8')
+    }
+  }
+
+  private removeLegacyAppConfigKeys (node: unknown): boolean {
+    if (!YAML.isMap(node)) {
+      return false
+    }
+
+    let removed = false
+    for (const legacyKey of this.legacyAppKeys) {
+      if (node.has(legacyKey)) {
+        node.delete(legacyKey)
+        removed = true
+      }
+    }
+
+    return removed
+  }
+
+  mergeObjectsWithPriority (
+    userDoc: YAML.Document.Parsed,
+    defaultDoc: YAML.Document.Parsed
+  ): { result: YAML.Document.Parsed; differences: boolean } {
+    let differences = false
+
+    /** 合并 YAML 对象，确保注释保留 */
+    const mergeYamlNodes = (target: any, source: any) => {
+      if (YAML.isMap(target) && YAML.isMap(source)) {
+        // 遍历 source 中的每一项，合并到 target 中
+        for (const pair of source.items) {
+          const key = pair.key
+          const value = pair.value
+
+          // 查找现有的键
+          const existing = target.get(key)
+
+          // 如果目标中没有该键，则添加新的键值对
+          if (existing === undefined) {
+            differences = true
+            target.set(key, value)
+          } else if (YAML.isMap(value) && YAML.isMap(existing)) {
+            // 如果值是一个嵌套的 Map 类型，则递归合并
+            mergeYamlNodes(existing, value)
+          } else if (existing !== value) {
+            // 如果值不同，进行覆盖
+            differences = true
+            target.set(key, value)
+          }
+        }
+      }
+    }
+
+    // 执行合并操作
+    mergeYamlNodes(defaultDoc.contents, userDoc.contents)
+
+    if (YAML.isMap(defaultDoc.contents)) {
+      const summaryParseNode = defaultDoc.contents.get('summaryParse', true)
+      if (YAML.isMap(summaryParseNode) && summaryParseNode.has('prompt')) {
+        differences = true
+        summaryParseNode.delete('prompt')
+      }
+      for (const legacyKey of this.legacyAppKeys) {
+        if (defaultDoc.contents.has(legacyKey)) {
+          differences = true
+          defaultDoc.contents.delete(legacyKey)
+        }
+      }
+    }
+
+    return { differences, result: defaultDoc }
+  }
+
+  /**
+   * 同步配置到数据库
+   * 这个方法应该在所有模块都初始化完成后调用
+   */
+  syncConfigToDatabase () {
+    const queuedSync = this.configSyncQueue
+      .catch(() => undefined)
+      .then(() => this.runConfigDatabaseSync())
+    this.configSyncQueue = queuedSync
+    return queuedSync
+  }
+
+  private async runConfigDatabaseSync () {
+    // 动态引入，避免顶层 await 循环依赖
+    const dbModule = import('../db')
+    const pushCfg = this.getDefOrConfig('pushlist') as ConfigType['pushlist']
+    const syncTasks: Array<{ platform: string, run: () => Promise<void> }> = [
+      {
+        platform: 'BilibiliDB',
+        run: async () => {
+          const { getBilibiliDB } = await dbModule
+          const bilibiliDB = await getBilibiliDB()
+          if (pushCfg.bilibili) await bilibiliDB.syncConfigSubscriptions(pushCfg.bilibili)
+        }
+      },
+      {
+        platform: 'DouyinDB',
+        run: async () => {
+          const { getDouyinDB } = await dbModule
+          const douyinDB = await getDouyinDB()
+          if (pushCfg.douyin) await douyinDB.syncConfigSubscriptions(pushCfg.douyin)
+        }
+      }
+    ]
+
+    const results = await Promise.allSettled(syncTasks.map(({ run }) => run()))
+    const failedPlatforms = results.flatMap((result, index) =>
+      result.status === 'rejected' ? [syncTasks[index].platform] : []
+    )
+
+    for (const platform of failedPlatforms) {
+      logger.error(`[${platform}] 配置同步到数据库失败`)
+    }
+    if (failedPlatforms.length > 0) {
+      throw new Error('订阅数据库同步失败')
+    }
+
+    logger.debug('[BilibiliDB] + [DouyinDB] 配置已同步到数据库')
   }
 }
 
 type Config$ = ConfigType & Pick<Cfg, 'All' | 'Modify' | 'ModifyPro' | 'syncConfigToDatabase'>
 
+/**
+ * 配置实例缓存
+ */
 let configInstance: Config$ | null = null
-let migrationExecuted = false
 
+/**
+ * 获取配置实例（延迟初始化）
+ * @returns 配置实例
+ */
 const getConfigInstance = (): Config$ => {
   if (!configInstance) {
-    // 首次初始化时执行迁移
-    if (!migrationExecuted) {
-      migrateConfigFromYaml()
-      migrationExecuted = true
-    }
-
     configInstance = new Proxy(new Cfg().initCfg(), {
-      get(target, prop: string) {
-        if (prop in target) return target[prop as keyof Cfg]
+      get (target, prop: string) {
+        if (prop in target) {
+          const value = target[prop as keyof Cfg]
+          return typeof value === 'function' ? value.bind(target) : value
+        }
         return target.getDefOrConfig(prop as keyof ConfigType)
       }
     }) as unknown as Config$
@@ -322,98 +621,11 @@ const getConfigInstance = (): Config$ => {
   return configInstance
 }
 
+/**
+ * 配置对象代理
+ */
 export const Config: Config$ = new Proxy({} as Config$, {
-  get(target, prop: string) {
+  get (target, prop: string) {
     return getConfigInstance()[prop as keyof Config$]
   }
 })
-
-/**
- * 从 YAML 迁移到 JSON
- */
-const migrateConfigFromYaml = () => {
-  const dirCfgPath = `${karinPathBase}/${Root.pluginName}/config`
-  const defCfgPath = `${Root.pluginPath}/config/default_config/`
-  const jsonConfigPath = `${dirCfgPath}/config.json`
-
-  if (fs.existsSync(jsonConfigPath)) return
-
-  const yamlFiles = ['app', 'bilibili', 'cookies', 'douyin', 'kuaishou', 'pushlist', 'request', 'upload', 'xiaohongshu']
-  const hasYaml = yamlFiles.some((name) => fs.existsSync(`${dirCfgPath}/${name}.yaml`))
-  if (!hasYaml) return
-
-  try {
-    // 读取默认配置作为模板
-    const defYaml: any = {}
-    for (const name of yamlFiles) {
-      const file = `${defCfgPath}/${name}.yaml`
-      if (fs.existsSync(file)) {
-        defYaml[name] = YAML.parse(fs.readFileSync(file, 'utf8'))
-      }
-    }
-
-    // 读取用户配置，只保留默认配置中存在的字段
-    const userYaml: any = {}
-    for (const name of yamlFiles) {
-      const file = `${dirCfgPath}/${name}.yaml`
-      if (fs.existsSync(file)) {
-        const data = YAML.parse(fs.readFileSync(file, 'utf8'))
-        userYaml[name] = filterKeys(data, defYaml[name])
-      }
-    }
-
-    // 转换结构
-    const jsonConfig = {
-      amagi: {
-        timeout: userYaml.request?.timeout ?? defYaml.request?.timeout,
-        'User-Agent': userYaml.request?.['User-Agent'] ?? defYaml.request?.['User-Agent'],
-        proxy: userYaml.request?.proxy ?? defYaml.request?.proxy,
-        cookies: userYaml.cookies || defYaml.cookies || {},
-        APIServer: userYaml.app?.APIServer ?? defYaml.app?.APIServer,
-        APIServerMount: userYaml.app?.APIServerMount ?? defYaml.app?.APIServerMount,
-        APIServerPort: userYaml.app?.APIServerPort ?? defYaml.app?.APIServerPort
-      },
-      app: {
-        ...defYaml.app,
-        ...defYaml.upload,
-        ...userYaml.app,
-        ...userYaml.upload
-      },
-      douyin: userYaml.douyin || defYaml.douyin,
-      bilibili: userYaml.bilibili || defYaml.bilibili,
-      kuaishou: userYaml.kuaishou || defYaml.kuaishou,
-      xiaohongshu: userYaml.xiaohongshu || defYaml.xiaohongshu,
-      pushlist: userYaml.pushlist || defYaml.pushlist
-    }
-
-    fs.writeFileSync(jsonConfigPath, JSON.stringify(jsonConfig, null, 2), 'utf8')
-
-    // 备份 YAML
-    const backupDir = `${dirCfgPath}/yaml_backup_${Date.now()}`
-    fs.mkdirSync(backupDir, { recursive: true })
-    for (const name of yamlFiles) {
-      const file = `${dirCfgPath}/${name}.yaml`
-      if (fs.existsSync(file)) {
-        fs.copyFileSync(file, `${backupDir}/${name}.yaml`)
-        fs.unlinkSync(file)
-      }
-    }
-
-    logger.info(`[karin-plugin-kkk][Config] YAML 配置已迁移到 config.json，备份保存在 ${backupDir}`)
-  } catch (error) {
-    logger.error(`[karin-plugin-kkk][Config] YAML 迁移失败: ${error}`)
-  }
-}
-
-const filterKeys = (user: any, template: any): any => {
-  if (!template || typeof template !== 'object') return user
-  if (Array.isArray(template)) return user
-
-  const result: any = {}
-  for (const key in template) {
-    if (key in user) {
-      result[key] = typeof template[key] === 'object' && !Array.isArray(template[key]) ? filterKeys(user[key], template[key]) : user[key]
-    }
-  }
-  return result
-}

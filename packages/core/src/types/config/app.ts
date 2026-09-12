@@ -1,5 +1,159 @@
+export type ResponsesReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+
+export interface sharedSummaryLlmConfig {
+  /** 接口基础地址 */
+  baseUrl: string
+  /** API Key */
+  apiKey: string
+  /** 模型名 */
+  model: string
+  /** 请求超时，毫秒 */
+  timeoutMs: number
+  /** 重试次数，仅对首次失败后的追加尝试次数生效 */
+  retryCount: number
+  /** 重试间隔，毫秒 */
+  retryDelayMs: number
+}
+
+export interface summaryParseLlmConfig extends sharedSummaryLlmConfig {
+  /** 是否启用联网搜索 */
+  webSearchEnabled?: boolean
+  /** 是否启用深度思考 */
+  reasoningEnabled?: boolean
+  /** 深度思考强度 */
+  reasoningEffort?: ResponsesReasoningEffort
+}
+
+export interface detailedSummaryParseLlmConfig extends sharedSummaryLlmConfig {
+  /** 是否启用联网搜索 */
+  webSearchEnabled: boolean
+  /** 是否启用深度思考 */
+  reasoningEnabled: boolean
+  /** 深度思考强度 */
+  reasoningEffort: ResponsesReasoningEffort
+}
+
+export interface transcriptOriginalLlmConfig extends sharedSummaryLlmConfig {
+  /** 是否启用深度思考 */
+  reasoningEnabled: boolean
+  /** 深度思考强度 */
+  reasoningEffort: ResponsesReasoningEffort
+}
+
+export interface summaryParseAsrConfig {
+  /** ASR 优先模式 */
+  mode: 'cloud' | 'local'
+  /** whisper.cpp CLI 路径 */
+  whisperCppPath: string
+  /** whisper.cpp 模型路径 */
+  modelPath: string
+  /** 语种 */
+  language: string
+  /** 转写线程数 */
+  threads: number
+  /** ffmpeg 路径 */
+  ffmpegPath: string
+  /** 抽音目标码率（kbps） */
+  audioBitrateKbps: number
+  /** 单段最大时长（分钟） */
+  maxSegmentMinutes: number
+  /** 视频抽帧配置 */
+  videoFrames?: {
+    /** 是否启用视频抽帧 */
+    enabled: boolean
+    /** 最小抽图间隔（秒） */
+    minIntervalSeconds: number
+    /** 最大抽图数量 */
+    maxImages: number
+    /** 跳过片头秒数 */
+    skipStartSeconds: number
+    /** 跳过片尾秒数 */
+    skipEndSeconds: number
+    /** 抽帧视频源策略 */
+    sourceMode: 'auto' | 'summary_optimized' | 'parsed_content'
+  }
+  /** 云端 ASR 配置 */
+  cloud: {
+    /** 接口基础地址 */
+    baseUrl: string
+    /** API Key */
+    apiKey: string
+    /** 模型名 */
+    model: string
+    /** 请求超时，毫秒 */
+    timeoutMs: number
+    /** 重试次数，仅对云端音频转写生效 */
+    retryCount: number
+    /** 重试间隔，毫秒 */
+    retryDelayMs: number
+  }
+}
+
+export interface summaryParseSharedConfig<LlmConfig = summaryParseLlmConfig> {
+  /** 解析总结开关 */
+  switch: boolean
+  /** 触发关键词列表，不包含前导斜杠 */
+  keywords: string[]
+  /** 生成总结后是否继续发送原始解析内容 */
+  sendParsedContent: boolean
+  /** OpenAI-compatible LLM 配置 */
+  llm: LlmConfig
+  /** 视频 ASR 配置 */
+  asr: summaryParseAsrConfig
+}
+
 /** 定义视频解析工具的配置接口 */
+export interface summaryParseConfig extends summaryParseSharedConfig {}
+
+export interface detailedSummaryParseConfig extends summaryParseSharedConfig<detailedSummaryParseLlmConfig> {
+  /** Markdown 渲染配置 */
+  markdownRender: {
+    /** 是否启用 Markdown 消息段渲染 */
+    enabled: boolean
+    /** 是否附带发送清洗后的纯文字版本 */
+    sendTextVersion: boolean
+    /** Markdown 渲染字体大小（px） */
+    fontSizePx: number
+    /** 是否启用详细研报独立分页 */
+    multiPageEnabled: boolean
+    /** Markdown 渲染图分页触发高宽比 */
+    multiPageTriggerAspectRatio: number
+    /** Markdown 渲染图分页后单页最大高宽比 */
+    multiPageMaxAspectRatio: number
+  }
+}
+
+export interface transcriptOriginalConfig extends summaryParseSharedConfig<transcriptOriginalLlmConfig> {
+  /** Markdown 渲染配置 */
+  markdownRender: {
+    /** 是否启用 Markdown 消息段渲染 */
+    enabled: boolean
+    /** 是否附带发送清洗后的纯文字版本 */
+    sendTextVersion: boolean
+    /** Markdown 渲染字体大小（px） */
+    fontSizePx: number
+    /** 是否启用独立分页 */
+    multiPageEnabled: boolean
+    /** Markdown 渲染图分页触发高宽比 */
+    multiPageTriggerAspectRatio: number
+    /** Markdown 渲染图分页后单页最大高宽比 */
+    multiPageMaxAspectRatio: number
+  }
+}
+
 export interface appConfig {
+  /** 自动更新开关，关闭后定时检查、提醒回复和手动更新命令都不会生效 */
+  autoUpdate: boolean
+
+  /** 检测到已安装新版本后自动重启，让新版本生效 */
+  autoRestartOnInstalledUpdate: boolean
+
+  /** 长任务完成后提醒触发者 */
+  longTaskCompletionNotify: boolean
+
+  /** 长任务提醒阈值，单位毫秒 */
+  longTaskCompletionNotifyThresholdMs: number
+
   /** 默认解析，即识别最高优先级，修改后重启生效 */
   videoTool: boolean
 
@@ -9,21 +163,17 @@ export interface appConfig {
   /** 缓存自动删除，非必要不修改！ */
   removeCache: boolean
 
+  /** 可复用共享缓存保留时长，单位小时 */
+  sharedCacheTtlHours: number
+
   /** 渲染精度，可选值50~200，建议100。设置高精度会提高图片的精细度，过高可能会影响渲染与发送速度 */
   renderScale: number
 
-  /** 渲染图片的主题色，0为自动，1为浅色，2为深色，3为智能场景（实验性，支持封面的模板会根据封面判断深浅色） */
+  /** 渲染图片的主题色，0为自动，1为浅色，2为深色 */
   Theme: number
 
-  /** 封面氛围背景参数：控制封面图对模板背景氛围的贡献度，取值均为 0~1 */
-  ambientCover: {
-    /** 模糊封面层不透明度：封面色强度总闸，越大整体越浓 */
-    coverOpacity: number
-    /** 主题色压色罩两端（顶/底）不透明度 */
-    overlayEdgeOpacity: number
-    /** 主题色压色罩中间带不透明度，越小封面色越透 */
-    overlayMiddleOpacity: number
-  }
+  /** 渲染的图片是否移除底部水印 */
+  RemoveWatermark: boolean
 
   /** 渲染图片的等待时间，单位：秒；传递0可禁用 */
   RenderWaitTime: number
@@ -49,11 +199,20 @@ export interface appConfig {
   /** 遇到错误时谁会收到错误日志？可选值：'master'（除'console'外的第一个主人）、'allMasters'（所有主人，排除console）、'trigger'（触发者） */
   errorLogSendTo: Array<'master' | 'allMasters' | 'trigger'>
 
-  /** 分页渲染，将模板渲染成多页的图片，以降低渲染器压力，默认开启，非必要不修改 */
+  /** 智能分页渲染，将超长渲染图按安全位置拆成多页图片，默认开启 */
   multiPageRender: boolean
 
-  /** 分页渲染时，每页的高度，经测试最佳每页高度为12000px，默认12000px */
-  multiPageHeight: number
+  /** 渲染图高宽比超过该值时触发智能分页 */
+  multiPageTriggerAspectRatio: number
+
+  /** 智能分页后，单页允许的最大高宽比 */
+  multiPageMaxAspectRatio: number
+
+  /** 渲染图输出格式，auto 为按模板使用内置推荐 */
+  renderImageFormat: 'auto' | 'png' | 'jpeg'
+
+  /** JPEG 渲染质量，1-100；auto/手动 JPEG 输出时生效 */
+  renderImageQuality: number
 
   /** 解析包含 Live Photo 作品时，发送的静态图兼容系统
    * - 'google': Google Motion Photo 格式
@@ -77,53 +236,12 @@ export interface appConfig {
   /** 外部访问地址（当 qrLoginAddrType 为 'external' 时使用，可以是公网IP或域名） */
   qrLoginExternalAddr: string
 
-  // ============ 以下字段从 uploadConfig 合并 ============
+  /** 解析总结配置 */
+  summaryParse: summaryParseConfig
 
-  /**
-   * 本地视频发送方式
-   * - 'file': 使用 file 协议发送本地视频（需 Karin 与协议端在同一系统）
-   * - 'base64': 转换为 base64 后发送（传输数据量增大约 30%，不在同一网络环境可能导致额外带宽成本）
-   */
-  videoSendMode: 'file' | 'base64'
+  /** 详细解析总结配置 */
+  detailedSummaryParse: detailedSummaryParseConfig
 
-  /** 视频上传拦截，开启后会根据视频文件大小判断是否需要上传，需配置「视频拦截阈值」。 */
-  usefilelimit: boolean
-
-  /** 视频拦截阈值，视频文件大于该数值则直接结束任务，不会上传，单位: MB，「视频上传拦截」开启后才会生效。 */
-  filelimit: number
-
-  /** 压缩视频，开启后会将视频文件压缩后再上传，适合上传大文件，任务过程中会吃满CPU，对低配服务器不友好。需配置「压缩触发阈值」与「压缩后的值」 */
-  compress: boolean
-
-  /** 压缩触发阈值，触发视频压缩的阈值，单位：MB。当文件大小超过该值时，才会压缩视频，「压缩视频」开启后才会生效 */
-  compresstrigger: number
-
-  /** 压缩后的值，单位：MB。若视频文件大小大于「压缩触发阈值」的值，则会进行压缩至该值（±5%），「压缩视频」开启后才会生效 */
-  compressvalue: number
-
-  /** 群文件上传，使用群文件上传，开启后会将视频文件上传到群文件中，需配置「群文件上传阈值」 */
-  usegroupfile: boolean
-
-  /** 群文件上传阈值，当文件大小超过该值时将使用群文件上传，单位：MB，「使用群文件上传」开启后才会生效 */
-  groupfilevalue: number
-
-  /**
-   * 网络图片发送方式
-   * - 'url': 直接传递 HTTP 链接给上游下载（可能因上游网络问题导致下载超时）
-   * - 'file': 下载到本地使用 file 协议发送（需 Karin 与协议端在同一系统）
-   * - 'base64': 下载后转换为 base64 发送（传输数据量增大约 30%，不在同一网络环境可能导致额外带宽成本）
-   */
-  imageSendMode: 'url' | 'file' | 'base64'
-
-  /** 下载限速开关，开启后会限制下载速度，避免触发服务器风控导致连接被重置 */
-  downloadThrottle: boolean
-
-  /** 下载速度限制，单位：MB/s，0 表示不限速。建议设置为 5-20 之间，过高可能触发风控 */
-  downloadMaxSpeed: number
-
-  /** 断流自动降速，当检测到连接被重置时自动降低下载速度 */
-  downloadAutoReduce: boolean
-
-  /** 最低下载速度，单位：MB/s，自动降速时不会低于此值 */
-  downloadMinSpeed: number
+  /** 转写原文配置 */
+  transcriptOriginal: transcriptOriginalConfig
 }

@@ -12,7 +12,6 @@ import {
   createListItemNode,
   createListNode,
   createLotteryNode,
-  createOpusLinkNode,
   createParagraphNode,
   createRichTextDocument,
   createTextNode,
@@ -24,7 +23,7 @@ import {
   type RichTextInlineStyle,
   type RichTextNode
 } from '@kkk/richtext'
-import { logger, segment, type ElementTypes } from 'node-karin'
+import { logger } from 'node-karin'
 
 /**
  * 用户名元数据，用于传递 VIP 状态和颜色信息
@@ -38,10 +37,13 @@ export interface UsernameMetadata {
 /**
  * 检查用户VIP状态并返回用户名元数据
  */
-export const getUsernameMetadata = (member: { name?: string; vip?: { status?: number; nickname_color?: string } }): UsernameMetadata => {
+export const getUsernameMetadata = (member: {
+  name?: string
+  vip?: { status?: number; nickname_color?: string }
+}): UsernameMetadata => {
   const vip = member.vip
   const vipStatus = vip?.status ?? 0
-  const nicknameColor = vipStatus === 1 && vip?.nickname_color && vip?.nickname_color !== '' ? vip?.nickname_color : null
+  const nicknameColor = (vipStatus === 1 && vip?.nickname_color && vip?.nickname_color !== '') ? vip?.nickname_color : null
   const name = member.name ?? ''
 
   return {
@@ -112,19 +114,7 @@ export const buildBilibiliDynamicRichText = (
     }
   }>
 ): RichTextDocument => {
-  const nodes: Array<
-    ReturnType<
-      | typeof createTextNode
-      | typeof createEmojiNode
-      | typeof createTopicNode
-      | typeof createAtNode
-      | typeof createLotteryNode
-      | typeof createWebLinkNode
-      | typeof createVoteNode
-      | typeof createViewPictureNode
-      | typeof createLineBreakNode
-    >
-  > = []
+  const nodes: Array<ReturnType<typeof createTextNode | typeof createEmojiNode | typeof createTopicNode | typeof createAtNode | typeof createLotteryNode | typeof createWebLinkNode | typeof createVoteNode | typeof createViewPictureNode | typeof createLineBreakNode>> = []
 
   if (!richTextNodes || !Array.isArray(richTextNodes) || richTextNodes.length === 0) {
     if (text) {
@@ -141,7 +131,7 @@ export const buildBilibiliDynamicRichText = (
   }
 
   // 辅助函数：根据单个 richTextNode 创建对应的富文本节点
-  const buildNodesFromTag = (tag: (typeof richTextNodes)[number]): Array<(typeof nodes)[number]> => {
+  const buildNodesFromTag = (tag: typeof richTextNodes[number]): Array<(typeof nodes)[number]> => {
     const matchText = tag.orig_text || tag.text || ''
     if (!matchText) return []
 
@@ -273,7 +263,9 @@ export const buildBilibiliDynamicRichText = (
  * - type: 1 → 纯文本（含换行、链接）
  * - type: 2 → @提及（biz_id 为用户ID）
  */
-export const buildBilibiliVideoDescRichText = (descV2: Array<{ raw_text?: string; type?: number; biz_id?: number }>): RichTextDocument => {
+export const buildBilibiliVideoDescRichText = (
+  descV2: Array<{ raw_text?: string; type?: number; biz_id?: number }>
+): RichTextDocument => {
   const nodes: RichTextNode[] = []
   for (const item of descV2) {
     const rawText = item.raw_text || ''
@@ -327,22 +319,6 @@ const parseOpusTextNodes = (
 ): RichTextNode[] => {
   const result: RichTextNode[] = []
   for (const node of nodes) {
-    // node_type 4：站内图文高亮链接，官方页面渲染成带图文图标的 <a>
-    if (node.node_type === 4) {
-      const link = node.link
-      if (!link?.show_text) {
-        logger.error(`[bilibili] opus 富文本遇到 node_type=4 但缺少 link 数据: ${JSON.stringify(node).slice(0, 500)}`)
-        continue
-      }
-      // 缺跳转地址时退化成普通文本，至少不丢正文
-      if (link.link) {
-        result.push(createOpusLinkNode(link.show_text, link.link))
-      } else {
-        result.push(createTextNode(link.show_text))
-      }
-      continue
-    }
-
     if (node.node_type !== 1 || !node.word) {
       // 记录未适配的节点类型
       if (node.node_type !== undefined && node.node_type !== 1) {
@@ -427,12 +403,14 @@ const parseOpusToRichText = (opus: ArticleContent['data']['opus'], useDarkTheme?
       const linkCard = paragraph.link_card
       const card = linkCard?.card
       if (card?.link) {
-        nodes.push(
-          createLinkCardNode(card.show_text || linkCard?.default_text || '链接卡片', card.link, {
+        nodes.push(createLinkCardNode(
+          card.show_text || linkCard?.default_text || '链接卡片',
+          card.link,
+          {
             cardType: String(card.link_type || ''),
             meta: { bizId: card.biz_id, contentCard: card.content_card }
-          })
-        )
+          }
+        ))
       } else {
         logger.error(`[bilibili] opus 富文本遇到 para_type=7 但缺少 link_card 数据: ${JSON.stringify(paragraph).slice(0, 500)}`)
       }
@@ -464,14 +442,22 @@ const parseOpusToRichText = (opus: ArticleContent['data']['opus'], useDarkTheme?
 
     // 检查是否是标题段落（通过 format.heading_type、header 样式、或字体大小模拟）
     const headingType = paragraph.format?.heading_type
-    const hasHeaderStyle = textNodes.some((n) => n.word?.style?.header && n.node_type === 1)
+    const hasHeaderStyle = textNodes.some(
+      n => n.word?.style?.header && n.node_type === 1
+    )
     // B站有些文章通过 font_size / font_level 模拟标题（para_type 仍为 1）
-    const hasLargeFont = textNodes.some((n) => n.node_type === 1 && n.word?.font_size && n.word.font_size >= 20)
-    const hasXLargeLevel = textNodes.some((n) => n.node_type === 1 && ['xLarge', 'large'].includes(n.word?.font_level))
+    const hasLargeFont = textNodes.some(
+      n => n.node_type === 1 && n.word?.font_size && n.word.font_size >= 20
+    )
+    const hasXLargeLevel = textNodes.some(
+      n => n.node_type === 1 && ['xLarge', 'large'].includes(n.word?.font_level)
+    )
     const isHeading = paraType === 9 || headingType !== undefined || hasHeaderStyle || hasLargeFont || hasXLargeLevel
     // 根据 font_size 推断标题级别（用于纯字体模拟的标题）
     const inferredHeadingLevel = (): number => {
-      const sizes = textNodes.filter((n) => n.node_type === 1 && n.word?.font_size).map((n) => n.word.font_size)
+      const sizes = textNodes
+        .filter(n => n.node_type === 1 && n.word?.font_size)
+        .map(n => n.word.font_size)
       if (sizes.length === 0) return 2
       const maxSize = Math.max(...sizes)
       if (maxSize >= 26) return 1
@@ -481,7 +467,9 @@ const parseOpusToRichText = (opus: ArticleContent['data']['opus'], useDarkTheme?
     }
 
     // 检查段落中是否有 list 样式
-    const hasList = textNodes.some((n) => n.word?.style?.list && n.node_type === 1)
+    const hasList = textNodes.some(
+      n => n.word?.style?.list && n.node_type === 1
+    )
     // 检查是否是引用段落
     const isBlockquote = paraType === 4
 
@@ -495,7 +483,7 @@ const parseOpusToRichText = (opus: ArticleContent['data']['opus'], useDarkTheme?
       if (typeof headingType === 'number' && headingType >= 1 && headingType <= 6) {
         level = headingType
       } else if (hasHeaderStyle) {
-        const headerNode = textNodes.find((n) => n.word?.style?.header)
+        const headerNode = textNodes.find(n => n.word?.style?.header)
         const headerLevel = headerNode?.word?.style?.header
         if (typeof headerLevel === 'number' && headerLevel >= 1 && headerLevel <= 6) {
           level = headerLevel
@@ -507,7 +495,7 @@ const parseOpusToRichText = (opus: ArticleContent['data']['opus'], useDarkTheme?
       nodes.push(createBlockquoteNode(inlineNodes))
     } else if (hasList) {
       // 确定列表类型（bullet / ordered）
-      const listNode = textNodes.find((n) => n.word?.style?.list)
+      const listNode = textNodes.find(n => n.word?.style?.list)
       const listType = listNode?.word?.style?.list
       const ordered = listType === 'ordered'
 
@@ -678,7 +666,7 @@ const parseHtmlContentToRichText = (content: string): RichTextDocument => {
         pushBlock(createBlockquoteNode([...(frame?.nodes || []), ...inlineNodes]))
       } else if (tag === 'ul' || tag === 'ol') {
         const frame = stack.pop()
-        const items = (frame?.nodes || []).filter((n) => n.type === 'listItem')
+        const items = (frame?.nodes || []).filter(n => n.type === 'listItem')
         pushBlock(createListNode(tag === 'ol', items as any))
       }
     }
@@ -736,188 +724,4 @@ export const buildBilibiliArticleRichText = (
     return parseHtmlContentToRichText(content)
   }
   return createRichTextDocument([], { platform: 'bilibili' })
-}
-
-type RichTextForwardMessageOptions = {
-  title?: string
-  summary?: string
-  shareUrl?: string
-  imageResolver?: (src: string, index: number) => Promise<string> | string
-}
-
-const MAX_FORWARD_TEXT_LENGTH = 1800
-
-const normalizeForwardText = (text: string): string => {
-  return text
-    .replace(/\r\n/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-const splitForwardText = (text: string): string[] => {
-  const chunks: string[] = []
-  let rest = text
-
-  while (rest.length > MAX_FORWARD_TEXT_LENGTH) {
-    let splitAt = rest.lastIndexOf('\n\n', MAX_FORWARD_TEXT_LENGTH)
-    if (splitAt < MAX_FORWARD_TEXT_LENGTH / 2) {
-      splitAt = rest.lastIndexOf('\n', MAX_FORWARD_TEXT_LENGTH)
-    }
-    if (splitAt < MAX_FORWARD_TEXT_LENGTH / 2) {
-      splitAt = MAX_FORWARD_TEXT_LENGTH
-    }
-
-    const chunk = rest.slice(0, splitAt).trim()
-    if (chunk) chunks.push(chunk)
-    rest = rest.slice(splitAt).trim()
-  }
-
-  if (rest) chunks.push(rest)
-  return chunks
-}
-
-const formatRichTextLink = (text: string, url?: string): string => {
-  if (!url || url === text) return text
-  return `${text} (${url})`
-}
-
-const inlineRichTextNodeToText = (node: RichTextNode): string => {
-  switch (node.type) {
-    case 'text':
-    case 'mention':
-    case 'searchKeyword':
-    case 'topic':
-    case 'at':
-    case 'lottery':
-    case 'vote':
-    case 'viewPicture':
-    case 'hashtag':
-      return node.text
-    case 'emoji':
-      return node.name
-    case 'webLink':
-      return formatRichTextLink(node.text, node.jumpUrl)
-    case 'opusLink':
-      return formatRichTextLink(node.text, node.url)
-    case 'lineBreak':
-      return '\n'
-    default:
-      return ''
-  }
-}
-
-/**
- * 将共享富文本文档转换为 Karin 消息段。
- *
- * 这里用于专栏正文的合并转发：文本节点保留为 text，图片节点保留为 image，
- * 让用户在客户端里能按原文顺序查看图文内容，而不是只能看渲染长图。
- */
-export const buildBilibiliRichTextForwardMessage = async (
-  document: RichTextDocument,
-  options: RichTextForwardMessageOptions = {}
-): Promise<ElementTypes[]> => {
-  const elements: ElementTypes[] = []
-  let textBuffer = ''
-  let imageIndex = 0
-
-  const appendText = (text: string) => {
-    if (!text) return
-    textBuffer += text
-  }
-
-  const ensureBlockBreak = () => {
-    if (!textBuffer) return
-    if (textBuffer.endsWith('\n\n')) return
-    textBuffer += textBuffer.endsWith('\n') ? '\n' : '\n\n'
-  }
-
-  const flushText = () => {
-    const text = normalizeForwardText(textBuffer)
-    textBuffer = ''
-    for (const chunk of splitForwardText(text)) {
-      elements.push(segment.text(chunk))
-    }
-  }
-
-  const appendChildren = async (nodes: RichTextNode[]) => {
-    for (const node of nodes) {
-      await appendNode(node)
-    }
-  }
-
-  const appendImage = async (src: string, caption?: string) => {
-    flushText()
-    const imageUrl = options.imageResolver ? await options.imageResolver(src, imageIndex) : src
-    imageIndex += 1
-    elements.push(segment.image(imageUrl))
-    if (caption) {
-      appendText(caption)
-      ensureBlockBreak()
-    }
-  }
-
-  const appendNode = async (node: RichTextNode): Promise<void> => {
-    const inlineText = inlineRichTextNodeToText(node)
-    if (inlineText) {
-      appendText(inlineText)
-      return
-    }
-
-    switch (node.type) {
-      case 'heading':
-      case 'paragraph':
-      case 'blockquote':
-      case 'listItem':
-        ensureBlockBreak()
-        await appendChildren(node.nodes)
-        ensureBlockBreak()
-        break
-      case 'image':
-        if (node.src) {
-          await appendImage(node.src, node.caption)
-        }
-        break
-      case 'list':
-        ensureBlockBreak()
-        for (const [index, item] of node.items.entries()) {
-          appendText(node.ordered ? `${index + 1}. ` : '- ')
-          await appendChildren(item.nodes)
-          appendText('\n')
-        }
-        ensureBlockBreak()
-        break
-      case 'codeBlock':
-        ensureBlockBreak()
-        appendText(node.content)
-        ensureBlockBreak()
-        break
-      case 'linkCard':
-        ensureBlockBreak()
-        appendText(formatRichTextLink(node.title, node.url))
-        ensureBlockBreak()
-        break
-      case 'horizontalRule':
-        ensureBlockBreak()
-        appendText('---')
-        ensureBlockBreak()
-        break
-      default:
-        break
-    }
-  }
-
-  const headerLines: string[] = []
-  if (options.title) headerLines.push(`标题：${options.title}`)
-  if (options.summary) headerLines.push(`简介：${options.summary}`)
-  if (options.shareUrl) headerLines.push(`链接：${options.shareUrl}`)
-  if (headerLines.length > 0) {
-    appendText(headerLines.join('\n'))
-    ensureBlockBreak()
-  }
-
-  await appendChildren(document.nodes)
-  flushText()
-
-  return elements
 }

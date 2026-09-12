@@ -8,6 +8,13 @@ sendContent:
   - 'image'
   - 'video'
 
+# 当消息内容只有小红书链接时，解析成功后额外发送「【小红书】作者：标题」
+plainTitleReply:
+  switch: true
+  types:
+    - video
+    - image
+
 # 小红书评论数量（预留）
 numcomment: 10
 

@@ -4,19 +4,27 @@
     "target": "ESNext",
     "esModuleInterop": true,
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "outDir": "./lib",
+    "rootDir": "..",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@template/*": ["./ktr/*"],
-      "@kkk/richtext": ["../richtext"],
-      "@ikenxuan/amagi": ["../amagi/packages/core/src/index.ts"],
-      "@ikenxuan/amagi/*": ["../amagi/packages/core/src/*"],
-      "amagi/*": ["../amagi/packages/core/src/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@kkk/template-contracts": [
+        "../template-contracts/src/index.ts"
+      ],
+      "template/server": [
+        "../template/src/server.ts"
+      ],
+      "@kkk/richtext": [
+        "../richtext"
+      ]
     },
-    "jsx": "react-jsx",
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "jsx": "react",
     "declaration": true,
     "noImplicitAny": true,
     "strict": true,
@@ -27,29 +35,26 @@
     "pretty": true,
     "inlineSourceMap": false,
     "alwaysStrict": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "noEmit": false,
     "strictPropertyInitialization": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "composite": true
+    "emitDecoratorMetadata": true
   },
   "include": [
     "src/**/*.ts",
-    "ktr/**/*.ts",
-    "ktr/**/*.tsx",
     "vite.plugin/**/*.ts",
+    "eslint.config.ts",
     "vite.config.ts",
-    "karin.template.ts",
-    ".ktr/**/*.d.ts"
+    "../template/src/**/*.ts",
+    "../template/src/**/*.tsx",
+    "../template-contracts/src/**/*.ts",
   ],
-  "references": [
-    {
-      "path": "../richtext"
-    },
-    {
-      "path": "../amagi/packages/core"
-    }
-  ],
-  "exclude": ["node_modules", "lib", "**/*.spec.ts", "**/*.test.ts"]
+  "exclude": [
+    "node_modules",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
 }

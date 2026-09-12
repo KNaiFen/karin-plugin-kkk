@@ -1,17 +1,20 @@
-import { HomeLayout } from 'fumadocs-ui/layouts/home'
+import { HomeLayout } from 'fumadocs-ui/layouts/home';
+import { baseOptions } from '@/lib/layout.shared';
+import { AuroraBackground } from '@/components/ui/aurora-background';
+import { getChangelog } from '@/lib/changelog';
+import { ChangelogDropdown } from '@/components/changelog-dropdown';
+import { KKKLogo } from '@/components/kkk-logo';
+import { MirrorSiteDropdown } from '@/components/mirror-site-dropdown';
 
-import { ChangelogDropdown } from '@/components/changelog-dropdown'
-import { KKKLogo } from '@/components/kkk-logo'
-import { MirrorSiteDropdown } from '@/components/mirror-site-dropdown'
-import { AuroraBackground } from '@/components/ui/aurora-background'
-import { getChangelog } from '@/lib/changelog'
-import { baseOptions } from '@/lib/layout.shared'
+export default async function Layout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const changelogs = await getChangelog();
+  const latestVersion = changelogs.v2.latest || 'v2.x.x';
 
-export default async function Layout({ children }: { children: React.ReactNode }) {
-  const changelogs = await getChangelog()
-  const latestVersion = changelogs.v2.latest || 'v2.x.x'
-
-  const homeOptions = baseOptions()
+  const homeOptions = baseOptions();
 
   homeOptions.nav = {
     ...homeOptions.nav,
@@ -21,12 +24,12 @@ export default async function Layout({ children }: { children: React.ReactNode }
         <ChangelogDropdown latestVersion={latestVersion} />
         <MirrorSiteDropdown />
       </div>
-    )
-  }
+    ),
+  };
 
   return (
     <AuroraBackground>
       <HomeLayout {...homeOptions}>{children}</HomeLayout>
     </AuroraBackground>
-  )
+  );
 }

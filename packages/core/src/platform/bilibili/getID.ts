@@ -4,31 +4,58 @@ import axios from 'node-karin/axios'
 
 import type { BilibiliDataTypes } from '@/types'
 
+import { Config } from '../../module/utils/Config'
+import { buildConfiguredRequestOptions } from '../../module/utils/RequestConfig'
+
 export interface BilibiliId {
   type: BilibiliDataTypes[keyof BilibiliDataTypes]
   [x: string]: any
 }
 
-/**
- * return aweme_id
- * @param {string} url 分享连接
- * @returns
- */
-export const getBilibiliID = async (url: string) => {
-  // 如果是专栏链接且带有 opus_fallback 参数，先去掉参数让它自然重定向
-  if (/\/read\/cv\d+/.test(url) && url.includes('opus_fallback')) {
-    url = url.split('?')[0]
+const normalizeBilibiliInput = (url: string): string => {
+  const cleaned = url.replace(/\\/g, '').trim()
+  if (/^BV[1-9a-zA-Z]{10}$/i.test(cleaned) || /^av\d+$/i.test(cleaned)) {
+    return `https://www.bilibili.com/video/${cleaned}`
+  }
+  if (/^(?:www\.|m\.|t\.|live\.)?bilibili\.com\//i.test(cleaned) || /^b23\.tv\//i.test(cleaned) || /^bili2233\.cn\//i.test(cleaned)) {
+    return `https://${cleaned}`
+  }
+  return cleaned
+}
+
+const shouldResolveRedirect = (url: string): boolean => {
+  try {
+    const hostname = new URL(normalizeBilibiliInput(url)).hostname.toLowerCase()
+    return hostname === 'b23.tv' || hostname === 'bili2233.cn'
+  } catch {
+    return true
+  }
+}
+
+const resolveAvIfNeeded = async (result: BilibiliId): Promise<BilibiliId> => {
+  const bvid = typeof result.bvid === 'string' ? result.bvid : undefined
+  if (!bvid?.toLowerCase().startsWith('av')) return result
+
+  const avid = parseInt(bvid.replace(/^av/i, ''))
+  const convertResult = await amagi.bilibiliFetcher.convertAvToBv({ avid, typeMode: 'strict' })
+  return {
+    ...result,
+    bvid: convertResult.data.data.bvid
+  }
+}
+
+export const parseBilibiliLongLink = (url: string): BilibiliId => {
+  const longLink = normalizeBilibiliInput(url)
+  let result = {} as BilibiliId
+  let parsedUrl: URL
+
+  try {
+    parsedUrl = new URL(longLink)
+  } catch {
+    return result
   }
 
-  const resp = await axios.get(url, {
-    headers: {
-      'User-Agent': 'Apifox/1.0.0 (https://apifox.com)'
-    }
-  })
-  const longLink = resp?.request?.res?.responseUrl ?? resp?.config?.url ?? url
-  let result = {} as BilibiliId
   let pValue: number | undefined
-  const parsedUrl = new URL(longLink)
   const pParam = parsedUrl.searchParams.get('p')
   if (pParam) {
     pValue = parseInt(pParam, 10)
@@ -78,13 +105,7 @@ export const getBilibiliID = async (url: string) => {
     }
     case /(video\/|video-)([A-Za-z0-9]+)/.test(longLink): {
       const bvideoMatch = /video\/([A-Za-z0-9]+)|bvid=([A-Za-z0-9]+)/.exec(longLink)
-      let bvid = bvideoMatch ? bvideoMatch[1] || bvideoMatch[2] : undefined
-
-      if (bvid && bvid.toLowerCase().startsWith('av')) {
-        const avid = parseInt(bvid.replace(/^av/i, ''))
-        const convertResult = await amagi.bilibiliFetcher.convertAvToBv({ avid, typeMode: 'strict' })
-        bvid = convertResult.data.data.bvid
-      }
+      const bvid = bvideoMatch ? bvideoMatch[1] || bvideoMatch[2] : undefined
 
       result = {
         type: 'one_video',
@@ -97,7 +118,7 @@ export const getBilibiliID = async (url: string) => {
       const festivalMatch = /festival\/([A-Za-z0-9]+)\?bvid=([A-Za-z0-9]+)/.exec(longLink)
       result = {
         type: 'one_video',
-        id: festivalMatch ? festivalMatch[2] : undefined
+        bvid: festivalMatch ? festivalMatch[2] : undefined
       }
       break
     }
@@ -136,10 +157,33 @@ export const getBilibiliID = async (url: string) => {
       break
     }
     default:
-      logger.warn('无法获取作品ID')
       break
   }
 
-  console.log(result)
   return result
+}
+
+/**
+ * return aweme_id
+ * @param {string} url 分享连接
+ * @returns
+ */
+export const getBilibiliID = async (url: string) => {
+  // 如果是专栏链接且带有 opus_fallback 参数，先去掉参数让它自然重定向
+  if (/\/read\/cv\d+/.test(url) && url.includes('opus_fallback')) {
+    url = url.split('?')[0]
+  }
+  if (!shouldResolveRedirect(url)) {
+    const directResult = parseBilibiliLongLink(url)
+    if (directResult.type) {
+      return await resolveAvIfNeeded(directResult)
+    }
+  }
+
+  const resp = await axios.get(url, buildConfiguredRequestOptions(Config.request, { maxRedirects: 10 }))
+  const longLink = resp?.request?.res?.responseUrl ?? resp?.config?.url ?? url
+  const result = parseBilibiliLongLink(longLink)
+  if (!result.type) logger.warn('无法获取作品ID')
+  logger.debug('[Bilibili] 链接解析结果:', result)
+  return await resolveAvIfNeeded(result)
 }

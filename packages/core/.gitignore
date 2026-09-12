@@ -16,5 +16,3 @@ napcat.quick.bat
 /dist
 tsconfig.tsbuildinfo
 resources/style/*
-
-src/apps/*.js

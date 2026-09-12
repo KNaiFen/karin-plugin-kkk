@@ -7,16 +7,88 @@ import type { AxiosInstance } from 'node-karin/axios'
 import { AxiosError } from 'node-karin/axios'
 
 import {
+  sanitizeFailureTraceText,
+  summarizeFailureTraceMessage
+} from '../ErrorTrace'
+import { executeSafeAxiosRequest, type OutboundRequestProfile } from '../OutboundRequest'
+import {
   calculateBackoffDelay,
   formatBytes,
-  getErrorDescription,
   isRecoverableNetworkError,
-  isThrottlingError,
-  sanitizeHeaders
+  isThrottlingError
 } from './helpers'
 import { ThrottleStream } from './ThrottleStream'
-import type { CustomAxiosRequestConfig, DownloadResult, ProgressCallback, ThrottleConfig } from './types'
+import type {
+  CustomAxiosRequestConfig,
+  DownloadResult,
+  ProgressCallback,
+  ThrottleConfig
+} from './types'
 import { DEFAULT_THROTTLE_CONFIG } from './types'
+
+class DownloadDiagnosticError extends Error {
+  constructor (message: string, cause?: unknown) {
+    super(message, cause === undefined ? undefined : { cause })
+    this.name = 'DownloadError'
+  }
+}
+
+const summarizeDownloadUrl = (value: unknown): string => {
+  const summary = summarizeFailureTraceMessage(value)
+  if (!summary) return '<empty-url>'
+
+  const fingerprint = summary.sha256.slice(0, 12)
+  if (summary.kind !== 'url' || !summary.url) {
+    return `<invalid-url> [sha256=${fingerprint}]`
+  }
+
+  const pathMarker = summary.url.pathTemplate === '/' ? '/' : '/<redacted>'
+  return `${summary.url.protocol}://${summary.url.host}${pathMarker} [sha256=${fingerprint}]`
+}
+
+const getSafeErrorCode = (error: unknown): string | undefined => {
+  const code = (error as { code?: unknown } | null)?.code
+  if (typeof code !== 'string') return undefined
+  const normalized = code.trim()
+  return /^[A-Z0-9_-]{1,64}$/i.test(normalized) ? normalized : undefined
+}
+
+const getSafeHttpStatus = (error: unknown): number | undefined => {
+  const status = Number((error as { response?: { status?: unknown } } | null)?.response?.status)
+  return Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined
+}
+
+const getSafeDownloadErrorDescription = (error: unknown): string => {
+  if (error instanceof DownloadDiagnosticError) {
+    return sanitizeFailureTraceText(error.message)
+  }
+
+  const status = getSafeHttpStatus(error)
+  const code = getSafeErrorCode(error)
+  const metadata = [
+    status ? `HTTP ${status}` : '',
+    code ? `错误代码 ${code}` : ''
+  ].filter(Boolean)
+
+  return metadata.length > 0
+    ? `下载请求失败（${metadata.join('，')}）`
+    : '下载处理失败'
+}
+
+const buildSafeDownloadCause = (error: unknown, urlSummary: string): Record<string, unknown> => {
+  return {
+    name: error instanceof Error ? error.name : 'Error',
+    status: getSafeHttpStatus(error),
+    code: getSafeErrorCode(error),
+    urlSummary
+  }
+}
+
+const formatContentSummary = (content: string): string => {
+  const summary = summarizeFailureTraceMessage(content)
+  if (!summary) return 'length=0'
+  return `length=${summary.length}, sha256=${summary.sha256.slice(0, 16)}`
+}
 
 /**
  * 文件下载器
@@ -32,15 +104,17 @@ export class Downloader {
   private throttleConfig: ThrottleConfig
   private currentSpeed: number
   private consecutiveResets: number
+  private outboundProfile?: OutboundRequestProfile
 
-  constructor(
+  constructor (
     axiosInstance: AxiosInstance,
     url: string,
     filepath: string,
     headers: Record<string, string>,
     timeout: number,
     maxRetries: number,
-    throttleConfig?: Partial<ThrottleConfig>
+    throttleConfig?: Partial<ThrottleConfig>,
+    outboundProfile?: OutboundRequestProfile
   ) {
     this.axiosInstance = axiosInstance
     this.url = url
@@ -51,6 +125,7 @@ export class Downloader {
     this.throttleConfig = { ...DEFAULT_THROTTLE_CONFIG, ...throttleConfig }
     this.currentSpeed = this.throttleConfig.maxSpeed
     this.consecutiveResets = 0
+    this.outboundProfile = outboundProfile
   }
 
   /**
@@ -58,15 +133,17 @@ export class Downloader {
    * @param progressCallback 进度回调
    * @param retryCount 当前重试次数
    */
-  async download(progressCallback: ProgressCallback, retryCount = 0): Promise<DownloadResult> {
+  async download (
+    progressCallback: ProgressCallback,
+    retryCount = 0
+  ): Promise<DownloadResult> {
     // URL 校验
     if (!this.url || !/^https?:\/\//i.test(this.url)) {
-      const sanitized = sanitizeHeaders(this.headers)
-      throw new Error(`Invalid URL: ${this.url || '(empty)'}, Headers: ${JSON.stringify(sanitized)}`)
+      throw new DownloadDiagnosticError(`下载地址无效，URL 摘要: ${summarizeDownloadUrl(this.url)}`)
     }
 
     if (!this.filepath) {
-      throw new Error('未指定文件保存路径: filepath 为空')
+      throw new DownloadDiagnosticError('未指定文件保存路径: filepath 为空')
     }
 
     const controller = new AbortController()
@@ -113,13 +190,19 @@ export class Downloader {
       }
 
       logger.debug('开始下载流', {
-        url: this.url,
-        headers: sanitizeHeaders(requestConfig.headers),
+        urlSummary: summarizeDownloadUrl(this.url),
         throttleEnabled: this.throttleConfig.enabled,
         currentSpeed: this.throttleConfig.enabled ? formatBytes(this.currentSpeed) + '/s' : '不限速'
       })
 
-      const response = await this.axiosInstance(requestConfig)
+      const { response } = await executeSafeAxiosRequest({
+        ...requestConfig,
+        url: this.url,
+        timeout: this.timeout
+      }, {
+        profile: this.outboundProfile,
+        requester: async (safeConfig) => await this.axiosInstance(safeConfig)
+      })
       clearTimeout(timeoutId)
 
       // 检查 HTTP 状态码
@@ -148,8 +231,7 @@ export class Downloader {
       }
 
       if (response.status !== 200 && response.status !== 206) {
-        logger.error(`下载失败: HTTP ${response.status}, URL: ${this.url}`)
-        logger.error(`响应头: ${JSON.stringify(response.headers)}`)
+        logger.error(`下载失败: HTTP ${response.status}, URL 摘要: ${summarizeDownloadUrl(this.url)}`)
 
         // 如果响应体很小，可能是错误信息，尝试读取
         if (response.headers['content-length'] && parseInt(response.headers['content-length']) < 10240) {
@@ -157,11 +239,13 @@ export class Downloader {
           response.data.on('data', (chunk: Buffer) => {
             errorBody += chunk.toString()
           })
-          await new Promise((resolve) => setTimeout(resolve, 100))
-          logger.error(`响应内容: ${errorBody}`)
+          await new Promise(resolve => setTimeout(resolve, 100))
+          logger.error(`响应内容摘要: ${formatContentSummary(errorBody)}`)
         }
 
-        throw new Error(`HTTP ${response.status}: ${this.url}`)
+        throw new DownloadDiagnosticError(
+          `HTTP ${response.status}`
+        )
       }
 
       // 检查服务器是否支持断点续传
@@ -194,8 +278,9 @@ export class Downloader {
       const rawContentLength = response.headers['content-length']
       const contentLength = Number.parseInt(rawContentLength ?? '-1', 10)
       if (Number.isNaN(contentLength)) {
-        const sanitized = sanitizeHeaders(this.headers)
-        throw new Error(`无效的 content-length 响应头, URL: ${this.url}, Headers: ${JSON.stringify(sanitized)}`)
+        throw new DownloadDiagnosticError(
+          '无效的 content-length 响应头'
+        )
       }
 
       const totalBytes = supportsRange ? startByte + contentLength : contentLength
@@ -227,7 +312,7 @@ export class Downloader {
 
       // 创建计数流
       const counterStream = new Transform({
-        transform(chunk, encoding, callback) {
+        transform (chunk, encoding, callback) {
           downloadedBytes += chunk.length
           callback(null, chunk)
         }
@@ -260,23 +345,21 @@ export class Downloader {
           // 尝试读取文件内容
           try {
             const content = fs.readFileSync(this.filepath, 'utf-8')
-            logger.error(`文件内容: ${content}`)
+            logger.error(`文件内容摘要: ${formatContentSummary(content)}`)
           } catch {
             logger.error('无法读取文件内容（可能是二进制文件）')
           }
 
-          throw new Error(`下载的文件异常小: ${formatBytes(actualSize)}，可能是错误响应或链接失效`)
+          throw new DownloadDiagnosticError(`下载的文件异常小: ${formatBytes(actualSize)}，可能是错误响应或链接失效`)
         }
 
         if (actualSize < expectedSize) {
           logger.warn(`文件大小不匹配: 实际 ${formatBytes(actualSize)}, 预期 ${formatBytes(expectedSize)}`)
-          logger.warn(
-            `差异: ${formatBytes(expectedSize - actualSize)} (${(((expectedSize - actualSize) / expectedSize) * 100).toFixed(2)}%)`
-          )
+          logger.warn(`差异: ${formatBytes(expectedSize - actualSize)} (${((expectedSize - actualSize) / expectedSize * 100).toFixed(2)}%)`)
 
           // 如果差异大于 10KB，认为下载不完整
           if (expectedSize - actualSize > 10 * 1024) {
-            throw new Error(`文件下载不完整: 实际 ${formatBytes(actualSize)}, 预期 ${formatBytes(expectedSize)}`)
+            throw new DownloadDiagnosticError(`文件下载不完整: 实际 ${formatBytes(actualSize)}, 预期 ${formatBytes(expectedSize)}`)
           }
         } else {
           logger.debug(`文件大小验证通过: ${formatBytes(actualSize)}`)
@@ -296,24 +379,25 @@ export class Downloader {
 
       const isRecoverable = isRecoverableNetworkError(error)
       const isThrottling = isThrottlingError(error)
-      const errorDesc = getErrorDescription(error)
+      const errorDesc = getSafeDownloadErrorDescription(error)
+      const urlSummary = summarizeDownloadUrl(this.url)
 
       if (error instanceof AxiosError) {
-        const sanitized = sanitizeHeaders(this.headers)
-        logger.error(`请求失败: ${errorDesc}, URL: ${this.url}, Headers: ${JSON.stringify(sanitized)}`)
+        logger.error(`请求失败: ${errorDesc}, URL 摘要: ${urlSummary}`)
       } else {
-        logger.error(`下载失败: ${errorDesc}`)
+        logger.error(`下载失败: ${errorDesc}, URL 摘要: ${urlSummary}`)
       }
 
       // 如果是断流错误，自动降速
       if (isThrottling && this.throttleConfig.enabled) {
         this.consecutiveResets++
-        const newSpeed = Math.max(this.currentSpeed * this.throttleConfig.autoReduceRatio, this.throttleConfig.minSpeed)
+        const newSpeed = Math.max(
+          this.currentSpeed * this.throttleConfig.autoReduceRatio,
+          this.throttleConfig.minSpeed
+        )
 
         if (newSpeed < this.currentSpeed) {
-          logger.warn(
-            `检测到服务器断流 (连续 ${this.consecutiveResets} 次)，自动降速: ${formatBytes(this.currentSpeed)}/s -> ${formatBytes(newSpeed)}/s`
-          )
+          logger.warn(`检测到服务器断流 (连续 ${this.consecutiveResets} 次)，自动降速: ${formatBytes(this.currentSpeed)}/s -> ${formatBytes(newSpeed)}/s`)
           this.currentSpeed = newSpeed
         } else {
           logger.warn(`已达到最低速度限制 ${formatBytes(this.throttleConfig.minSpeed)}/s，无法继续降速`)
@@ -347,7 +431,7 @@ export class Downloader {
           logger.warn(`正在重试下载... (${retryCount + 1}/${this.maxRetries})，将在 ${nextDelay / 1000} 秒后重试`)
         }
 
-        await new Promise((resolve) => setTimeout(resolve, nextDelay))
+        await new Promise(resolve => setTimeout(resolve, nextDelay))
         return this.download(progressCallback, retryCount + 1)
       } else {
         // 最终失败处理
@@ -366,13 +450,15 @@ export class Downloader {
               fs.unlinkSync(this.filepath)
               logger.debug('已清理部分下载的文件')
             } catch (cleanupError) {
-              logger.warn('清理部分下载文件失败:', cleanupError)
+              logger.warn(`清理部分下载文件失败: ${getSafeDownloadErrorDescription(cleanupError)}`)
             }
           }
         }
 
-        const sanitized = sanitizeHeaders(this.headers)
-        throw new Error(`在 ${this.maxRetries} 次尝试后下载失败: ${errorDesc}, URL: ${this.url}, Headers: ${JSON.stringify(sanitized)}`)
+        throw new DownloadDiagnosticError(
+          `在 ${this.maxRetries} 次尝试后下载失败: ${errorDesc}, URL 摘要: ${urlSummary}`,
+          buildSafeDownloadCause(error, urlSummary)
+        )
       }
     }
   }
@@ -381,7 +467,7 @@ export class Downloader {
    * 手动设置下载速度
    * @param speed 速度 (bytes/s)
    */
-  setSpeed(speed: number): void {
+  setSpeed (speed: number): void {
     this.currentSpeed = Math.max(speed, this.throttleConfig.minSpeed)
     logger.debug(`手动设置下载速度: ${formatBytes(this.currentSpeed)}/s`)
   }
@@ -389,7 +475,7 @@ export class Downloader {
   /**
    * 获取当前速度设置
    */
-  getSpeed(): number {
+  getSpeed (): number {
     return this.currentSpeed
   }
 }

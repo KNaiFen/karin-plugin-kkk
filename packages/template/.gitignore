@@ -1,0 +1,4 @@
+dist/
+@karinjs
+tsconfig.tsbuildinfo
+dev-data

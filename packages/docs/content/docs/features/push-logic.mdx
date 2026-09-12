@@ -3,9 +3,9 @@ title: 推送逻辑机制
 description: 深入了解插件的抖音和B站推送实现原理
 ---
 
-import { Steps } from 'fumadocs-ui/components/steps'
-import { Callout } from 'fumadocs-ui/components/callout'
-import { Accordion, Accordions } from 'fumadocs-ui/components/accordion'
+import { Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
 
 本页按当前 `core` 实现说明抖音与 B站推送的检测、去重和分发方式。
 
@@ -20,15 +20,19 @@ import { Accordion, Accordions } from 'fumadocs-ui/components/accordion'
 
 <Accordions>
   <Accordion title="喜欢列表推送效果">
-    当监控的博主点赞了某个视频时触发，是否能抓到数据取决于对方是否公开了喜欢列表。 ![喜欢列表推送效果展示](/favorite-demo-placeholder.png)
+    当监控的博主点赞了某个视频时触发，是否能抓到数据取决于对方是否公开了喜欢列表。
+    
+    ![喜欢列表推送效果展示](/favorite-demo-placeholder.png)
   </Accordion>
   <Accordion title="推荐列表推送效果">
-    当博主将某个视频标记为“推荐”时触发，同样依赖对方的公开设置。 ![推荐列表推送效果展示](/recommend-demo-placeholder.png)
+    当博主将某个视频标记为“推荐”时触发，同样依赖对方的公开设置。
+    
+    ![推荐列表推送效果展示](/recommend-demo-placeholder.png)
   </Accordion>
 </Accordions>
 
 <Callout type="warn">
-  **隐私设置警告**：这两个功能依赖于博主的隐私设置。如果博主将喜欢/推荐列表设置为“仅自己可见”，插件将无法获取数据并会输出警告日志。
+**隐私设置警告**：这两个功能依赖于博主的隐私设置。如果博主将喜欢/推荐列表设置为“仅自己可见”，插件将无法获取数据并会输出警告日志。
 </Callout>
 
 ### 核心机制
@@ -38,28 +42,22 @@ import { Accordion, Accordions } from 'fumadocs-ui/components/accordion'
 插件会根据 `douyin.push.cron` 定时轮询。订阅源本身保存在 `pushlist` 中，通常由 `#设置抖音推送 抖音号` 维护。
 
 ### 类型分发
-
 针对每个订阅用户，系统会并行检查以下配置开启的推送类型：
-
 - **作品 (Post)**: 用户的发布视频或图文。
 - **喜欢 (Favorite)**: 用户点赞的内容（需用户公开喜欢列表）。
 - **推荐 (Recommend)**: 用户推荐的内容（需用户公开推荐列表）。
 - **直播 (Live)**: 用户的实时直播状态。
 
 ### 数据比对与去重
-
 系统会把已推送记录写入数据库，按作品 ID 去重。这样即使你手动强制推送，也不会反复刷同一条内容。
 
 ### 渲染与分发
-
 不同类型的推送会使用专属的 UI 模板进行渲染：
-
 - **作品**: 展示视频封面、标题、数据统计。
 - **喜欢/推荐**: 额外展示“谁喜欢了谁”或“谁推荐了谁”的关联信息，增强社交属性。
 - **直播**: 展示直播封面、标题、在线人数及直播间链接。
 
 最后，渲染生成的图片会分发至所有订阅了该用户的群组和机器人。
-
 </Steps>
 
 ---
@@ -75,25 +73,19 @@ B站推送主要关注动态更新和直播状态。
 通过 Bilibili API 获取订阅 UP 主的最近动态历史。
 
 ### 智能筛选
-
 为了保证推送的时效性和质量，系统会执行以下筛选：
-
 - **排除置顶**：置顶动态通常是旧内容的长期展示，默认忽略。
 - **时效限制**：自动过滤发布时间超过 24 小时的旧动态（防止首次运行时刷屏）。
 
 ### 类型处理
-
 支持多种动态类型的解析与渲染：
-
 - **视频投稿 (`DYNAMIC_TYPE_AV`)**: 提取封面、标题、简介，生成视频卡片。
 - **图文动态 (`DYNAMIC_TYPE_DRAW`)**: 展示图片预览。
 - **直播推荐 (`DYNAMIC_TYPE_LIVE_RCMD`)**: 当 UP 主通过动态发布开播通知时触发。
 - **转发动态 (`DYNAMIC_TYPE_FORWARD`)**: 嵌套展示原动态内容。
 
 ### 直播监控
-
 除了依赖动态流中的开播通知，插件还会主动轮询直播状态，尽量避免漏掉未发动态的突袭直播。
-
 </Steps>
 
 ### 去重机制
@@ -108,4 +100,6 @@ B站推送同样基于数据库进行严格去重。已推送的 `dynamic_id` �
 - 作品解析（`push.parsedynamic`）
 - 画质偏好 / 解析视频动态时的画质偏好（`push.pushVideoQuality`）
 
-<Callout type="info">推送是否“能配置成功”，除了平台配置外，还取决于 `pushlist` 里是否存在正确的 `群号:机器人账号` 绑定。</Callout>
+<Callout type="info">
+推送是否“能配置成功”，除了平台配置外，还取决于 `pushlist` 里是否存在正确的 `群号:机器人账号` 绑定。
+</Callout>

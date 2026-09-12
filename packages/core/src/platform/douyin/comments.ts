@@ -10,13 +10,14 @@ import {
   type RichTextEmojiDefinition,
   type RichTextNode
 } from '@kkk/richtext'
-import type { DouyinCommentData } from '@template/template/douyin/comment/components/types'
 import decode from 'heic-decode'
 import jpeg from 'jpeg-js'
+import type { DouyinCommentProps } from '@kkk/template-contracts'
 
 import { Networks } from '@/module/utils'
 import { douyinFetcher } from '@/module/utils/amagiClient'
 import { Config } from '@/module/utils/Config'
+
 
 /**
  * @description 提取评论里的 @ 用户 sec_uid 列表
@@ -28,7 +29,7 @@ const extractMentionSecUids = (textExtra: unknown): string[] | null => {
 
   const secUids = textExtra
     .filter((item): item is { sec_uid?: string } => typeof item === 'object' && item !== null)
-    .map((item) => item.sec_uid)
+    .map(item => item.sec_uid)
     .filter((secUid): secUid is string => Boolean(secUid))
 
   return secUids.length > 0 ? secUids : null
@@ -44,8 +45,8 @@ const extractSearchText = (textExtra: unknown) => {
 
   const searchItems = textExtra
     .filter((item): item is { search_text?: string; search_query_id?: string } => typeof item === 'object' && item !== null)
-    .filter((item) => Boolean(item.search_text))
-    .map((item) => ({
+    .filter(item => Boolean(item.search_text))
+    .map(item => ({
       search_text: item.search_text!,
       search_query_id: item.search_query_id ?? ''
     }))
@@ -65,7 +66,7 @@ type DouyinMentionToken = {
   userId: string
 }
 
-type DouyinCommentItem = DouyinCommentData['CommentsData'][number]
+type DouyinCommentItem = DouyinCommentProps['data']['CommentsData'][number]
 type DouyinReplyCommentItem = NonNullable<DouyinCommentItem['replyComment']>[number]
 
 /**
@@ -80,41 +81,34 @@ const extractSearchTokens = (textExtra: unknown, text: string): DouyinSearchToke
   }
 
   return textExtra
-    .filter(
-      (
-        item
-      ): item is {
-        start?: number
-        end?: number
-        search_text?: string
-        search_query_id?: string
-      } => typeof item === 'object' && item !== null
-    )
-    .filter(
-      (
-        item
-      ): item is {
-        start: number
-        end: number
-        search_text: string
-        search_query_id?: string
-      } =>
-        typeof item.start === 'number' &&
-        typeof item.end === 'number' &&
-        typeof item.search_text === 'string' &&
-        item.search_text.length > 0 &&
-        item.start >= 0 &&
-        item.end > item.start &&
-        item.end <= text.length
-    )
-    .map((item) => ({
+    .filter((item): item is {
+      start?: number
+      end?: number
+      search_text?: string
+      search_query_id?: string
+    } => typeof item === 'object' && item !== null)
+    .filter((item): item is {
+      start: number
+      end: number
+      search_text: string
+      search_query_id?: string
+    } => (
+      typeof item.start === 'number' &&
+      typeof item.end === 'number' &&
+      typeof item.search_text === 'string' &&
+      item.search_text.length > 0 &&
+      item.start >= 0 &&
+      item.end > item.start &&
+      item.end <= text.length
+    ))
+    .map(item => ({
       start: item.start,
       end: item.end,
       text: item.search_text,
       queryId: item.search_query_id ?? ''
     }))
-    .filter((item) => text.slice(item.start, item.end) === item.text)
-    .sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start))
+    .filter(item => text.slice(item.start, item.end) === item.text)
+    .sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start))
 }
 
 /**
@@ -130,27 +124,27 @@ const resolveMentionTokens = async (userIds: string[] | null): Promise<DouyinMen
 
   const uniqueUserIds = [...new Set(userIds)]
 
-  const mentionTokens = await Promise.all(
-    uniqueUserIds.map(async (secUid) => {
-      try {
-        const userInfo = await douyinFetcher.fetchUserProfile({ sec_uid: secUid, typeMode: 'strict' })
-        const nickname = userInfo.data.user.nickname?.trim()
+  const mentionTokens = await Promise.all(uniqueUserIds.map(async (secUid) => {
+    try {
+      const userInfo = await douyinFetcher.fetchUserProfile({ sec_uid: secUid, typeMode: 'strict' })
+      const nickname = userInfo.data.user.nickname?.trim()
 
-        if (!nickname || userInfo.data.user.sec_uid !== secUid) {
-          return null
-        }
-
-        return {
-          text: `@${nickname}`,
-          userId: secUid
-        }
-      } catch {
+      if (!nickname || userInfo.data.user.sec_uid !== secUid) {
         return null
       }
-    })
-  )
 
-  return mentionTokens.filter((item): item is DouyinMentionToken => Boolean(item)).sort((a, b) => b.text.length - a.text.length)
+      return {
+        text: `@${nickname}`,
+        userId: secUid
+      }
+    } catch {
+      return null
+    }
+  }))
+
+  return mentionTokens
+    .filter((item): item is DouyinMentionToken => Boolean(item))
+    .sort((a, b) => b.text.length - a.text.length)
 }
 
 /**
@@ -169,7 +163,9 @@ const buildDouyinRichText = async (
   searchTokens: DouyinSearchToken[] = []
 ): Promise<RichTextDocument> => {
   const mentionTokens = await resolveMentionTokens(mentionUserIds)
-  const emojiTokens = emojiData.filter((item) => Boolean(item?.name) && Boolean(item?.url)).sort((a, b) => b.name.length - a.name.length)
+  const emojiTokens = emojiData
+    .filter(item => Boolean(item?.name) && Boolean(item?.url))
+    .sort((a, b) => b.name.length - a.name.length)
 
   const nodes: RichTextNode[] = []
   let buffer = ''
@@ -216,7 +212,7 @@ const buildDouyinRichText = async (
       continue
     }
 
-    const matchedMention = mentionTokens.find((item) => text.startsWith(item.text, index))
+    const matchedMention = mentionTokens.find(item => text.startsWith(item.text, index))
     if (matchedMention) {
       pushBuffer()
       nodes.push(createMentionNode(matchedMention.text, matchedMention.userId))
@@ -224,7 +220,7 @@ const buildDouyinRichText = async (
       continue
     }
 
-    const matchedEmoji = emojiTokens.find((item) => text.startsWith(item.name, index))
+    const matchedEmoji = emojiTokens.find(item => text.startsWith(item.name, index))
     if (matchedEmoji) {
       pushBuffer()
       nodes.push(createEmojiNode(matchedEmoji.name, matchedEmoji.url))
@@ -252,10 +248,10 @@ const processCommentImage = async (imageUrl: string | null): Promise<string | nu
   const headers = await new Networks({ url: imageUrl, type: 'arraybuffer' }).getHeaders()
   if (headers['content-type'] && headers['content-type'] === 'image/heic') {
     const response = await new Networks({ url: imageUrl, type: 'arraybuffer' }).returnResult()
-
+    
     // 使用 heic-decode 解码 HEIC 图片
     const decoded = await decode({ buffer: response.data })
-
+    
     // 使用 jpeg-js 将 RGBA 数据编码为 JPEG
     const jpegImageData = {
       data: Buffer.from(decoded.data),
@@ -263,7 +259,7 @@ const processCommentImage = async (imageUrl: string | null): Promise<string | nu
       height: decoded.height
     }
     const jpegBuffer = jpeg.encode(jpegImageData, 90).data
-
+    
     const base64Image = Buffer.from(jpegBuffer).toString('base64')
     return `data:image/jpeg;base64,${base64Image}`
   }
@@ -292,7 +288,10 @@ export const douyinComments = async (data: Result<DyWorkComments>, emojidata: an
     const sticker = comment.sticker ? comment.sticker.animate_url.url_list[0] : null
     const digg_count = comment.digg_count
     const imageurl =
-      comment.image_list && comment.image_list?.[0] && comment.image_list?.[0].origin_url && comment.image_list?.[0].origin_url.url_list
+      comment.image_list &&
+        comment.image_list?.[0] &&
+        comment.image_list?.[0].origin_url &&
+        comment.image_list?.[0].origin_url.url_list
         ? comment.image_list?.[0].origin_url.url_list[0]
         : null
     const status_label = comment.label_list?.[0]?.text ?? null
@@ -306,11 +305,7 @@ export const douyinComments = async (data: Result<DyWorkComments>, emojidata: an
 
     // 收集评论图片
     if (processedImageUrl) {
-      imageUrls.push(
-        processedImageUrl.startsWith('data:image/jpeg;base64,')
-          ? `base64://${processedImageUrl.replace('data:image/jpeg;base64,', '')}`
-          : processedImageUrl
-      )
+      imageUrls.push(processedImageUrl.startsWith('data:image/jpeg;base64,') ? `base64://${processedImageUrl.replace('data:image/jpeg;base64,', '')}` : processedImageUrl)
     }
 
     // 收集表情包图片
@@ -330,7 +325,8 @@ export const douyinComments = async (data: Result<DyWorkComments>, emojidata: an
     if (replyComment.data.comments && replyComment.data.comments.length > 0) {
       for (const reply of replyComment.data.comments) {
         const replyItem = reply
-        const replyUserintextlongid = extractMentionSecUids(replyItem.text_extra)
+        const replyUserintextlongid =
+          extractMentionSecUids(replyItem.text_extra)
         const replySearchTokens = extractSearchTokens(replyItem.text_extra, replyItem.text)
         const replyRichText = await buildDouyinRichText(replyItem.text, emojidata, replyUserintextlongid, replySearchTokens)
 
@@ -343,11 +339,7 @@ export const douyinComments = async (data: Result<DyWorkComments>, emojidata: an
           const processedReplyImage = await processCommentImage(replyImageUrl)
           if (processedReplyImage) {
             replyImageList = [processedReplyImage]
-            imageUrls.push(
-              processedReplyImage.startsWith('data:image/jpeg;base64,')
-                ? `base64://${processedReplyImage.replace('data:image/jpeg;base64,', '')}`
-                : processedReplyImage
-            )
+            imageUrls.push(processedReplyImage.startsWith('data:image/jpeg;base64,') ? `base64://${processedReplyImage.replace('data:image/jpeg;base64,', '')}` : processedReplyImage)
           }
         } else if (replyStickerUrl) {
           replyImageList = [replyStickerUrl]
@@ -371,7 +363,7 @@ export const douyinComments = async (data: Result<DyWorkComments>, emojidata: an
       }
     }
 
-    const commentObj: DouyinCommentData['CommentsData'][number] = {
+    const commentObj: DouyinCommentProps['data']['CommentsData'][number] = {
       id: id++,
       replyComment: replyComments.length > 0 ? replyComments : undefined,
       cid,
