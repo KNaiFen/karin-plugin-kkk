@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      source: ${{ steps.changes.outputs.source }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Test CI decisions and package checks
+        run: node --test scripts/ci.test.mjs
+      - name: Detect changes and record revisions
+        id: changes
+        run: node scripts/ci-changes.mjs
+
+  verify:
+    name: Verify (Node 24)
+    needs: changes
+    if: needs.changes.outputs.source == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies and build Amagi
+        run: pnpm install --frozen-lockfile
+      - name: Check Node version
+        run: pnpm --filter karin-plugin-kkk run check:node
+      - name: Lint core
+        run: pnpm --filter karin-plugin-kkk run lint:check
+      - name: Typecheck core
+        run: pnpm --filter karin-plugin-kkk run typecheck
+      - name: Test core
+        run: pnpm --filter karin-plugin-kkk run test
+      - name: Typecheck shared packages
+        run: |
+          pnpm --dir packages/template exec tsc --noEmit -p tsconfig.app.json
+          pnpm --dir packages/richtext exec tsc --noEmit
+          pnpm --dir packages/template-contracts exec tsc --noEmit
+      - name: Typecheck Amagi
+        run: pnpm --filter @ikenxuan/amagi run typecheck
+      - name: Test Amagi
+        working-directory: packages/amagi/packages/core
+        run: node --import tsx --test test/*.test.ts
+      - name: Build template and core runtime
+        run: |
+          pnpm --filter template run build
+          pnpm --filter karin-plugin-kkk run build:runtime
+      - name: Pack and verify the exact archive
+        run: node scripts/ci-pack.mjs
+
+  compatibility:
+    name: Compatibility (Node 22)
+    needs: changes
+    if: needs.changes.outputs.source == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies and build Amagi
+        run: pnpm install --frozen-lockfile
+      - name: Check Node version
+        run: pnpm --filter karin-plugin-kkk run check:node
+      - name: Test core
+        run: pnpm --filter karin-plugin-kkk run test
+
+  gate:
+    name: CI Gate
+    needs: [changes, verify, compatibility]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require all requested checks
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci-gate.mjs

@@ -54,6 +54,7 @@ permissions:
 jobs:
   # 版本发布管理
   version-release:
+    if: github.repository == 'ikenxuan/karin-plugin-kkk'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -140,6 +141,7 @@ jobs:
 
   # 核心质量门禁
   quality:
+    if: github.repository == 'ikenxuan/karin-plugin-kkk'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:

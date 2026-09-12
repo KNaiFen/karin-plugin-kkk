@@ -40,8 +40,9 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "pnpm --dir ../amagi/packages/core run build && pnpm --dir .. --filter template run build && cross-env NODE_ENV=production vite build && tsdown",
+    "build": "pnpm --dir ../amagi/packages/core run build && pnpm --dir .. --filter template run build && pnpm run build:runtime",
     "build:check": "tsc --noEmit && pnpm build",
+    "build:runtime": "cross-env NODE_ENV=production vite build && tsdown",
     "check:node": "node -e \"if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Node.js >= 22 is required')\"",
     "dev": "cross-env EBV_FILE=\"development.env\" node --import tsx src/app.ts --trace-deprecation",
     "lint": "eslint . --fix",
