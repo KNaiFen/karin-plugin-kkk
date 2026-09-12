@@ -1,4 +1,4 @@
-import { type Message, segment } from 'node-karin'
+import type { Message } from 'node-karin'
 
 import {
   Base,
@@ -21,8 +21,6 @@ import {
   getTiebaContentText,
   getTiebaPostDetail,
   type TiebaComment,
-  type TiebaContentPart,
-  type TiebaDetail,
   tiebaMediaHeaders } from './api'
 import type { TiebaIdData } from './getID'
 
@@ -34,25 +32,11 @@ const defaultPlainTitleContext = (): PlainVideoTitleContext => createPlainVideoT
     : ['text', 'image', 'video']
 )
 
-const formatStats = (detail: TiebaDetail): string => {
-  const parts = [
-    detail.stats.view ? `浏览 ${detail.stats.view}` : '',
-    detail.stats.like ? `点赞 ${detail.stats.like}` : '',
-    detail.stats.comment ? `回复 ${detail.stats.comment}` : '',
-    detail.stats.share ? `分享 ${detail.stats.share}` : ''
-  ].filter(Boolean)
-  return parts.length > 0 ? parts.join(' / ') : '暂无统计'
-}
-
 const formatCommentLine = (comment: TiebaComment): string => {
   const text = getTiebaContentText(comment.content)
   const floor = comment.floor ? `${comment.floor}楼 ` : ''
   const like = comment.stats.like ? ` (${comment.stats.like}赞)` : ''
   return `${floor}${comment.author.name}${like}：${text || '[媒体内容]'}`
-}
-
-const pickParts = (parts: TiebaContentPart[], type: 'image' | 'video'): TiebaContentPart[] => {
-  return parts.filter(part => part.type === type)
 }
 
 const getRenderCardConfig = (): { enable: boolean, includeImages: boolean } => {

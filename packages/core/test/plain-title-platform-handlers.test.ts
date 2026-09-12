@@ -1,6 +1,8 @@
 import fs from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import {
   buildDouyinHtmlWorkFromAwemeDetail,
@@ -1287,7 +1289,9 @@ describe('plain title replies in platform video handlers', () => {
     const longGraphicText = '妈妈说其实当时我出生的时候爷爷不高兴因为我是个女孩。\n后来我才明白，她讲的是一段很长、也很真实的家庭记忆。'
     state.config.douyin.sendContent = ['image', 'info']
     state.config.douyin.longTitleFullText = true
-    const audioPath = '/private/tmp/douyin-note-static-bgm-test.mp3'
+    const tempDir = fs.mkdtempSync(join(tmpdir(), 'douyin-note-static-bgm-'))
+    onTestFinished(() => fs.rmSync(tempDir, { recursive: true, force: true }))
+    const audioPath = join(tempDir, 'audio.mp3')
     fs.writeFileSync(audioPath, 'stub-audio')
     state.downloadFile.mockResolvedValue({ filepath: audioPath, totalBytes: 1024 })
     const event = {
@@ -1427,8 +1431,6 @@ describe('plain title replies in platform video handlers', () => {
         })
       })
     )
-
-    fs.rmSync(audioPath, { force: true })
   })
 
   it('replies Douyin article works with article render card in image mode', async () => {
@@ -1742,7 +1744,9 @@ describe('plain title replies in platform video handlers', () => {
   it('still sends a standalone bgm record for Douyin live-photo notes before any derived artifacts', async () => {
     state.config.douyin.sendContent = []
     state.config.app.livePhotoMode = 'livephoto_only'
-    const audioPath = '/private/tmp/douyin-live-note-bgm-test.mp3'
+    const tempDir = fs.mkdtempSync(join(tmpdir(), 'douyin-live-note-bgm-'))
+    onTestFinished(() => fs.rmSync(tempDir, { recursive: true, force: true }))
+    const audioPath = join(tempDir, 'audio.mp3')
     fs.writeFileSync(audioPath, 'stub-live-note-audio')
     state.downloadFile.mockImplementation(async (url: string) => {
       if (url.includes('.mp3')) {
@@ -1795,8 +1799,6 @@ describe('plain title replies in platform video handlers', () => {
       type: 'record',
       url: expect.stringContaining('base64://')
     }))
-
-    fs.rmSync(audioPath, { force: true })
   })
 
   it('starts Douyin video download before rendering comments when both are enabled', async () => {

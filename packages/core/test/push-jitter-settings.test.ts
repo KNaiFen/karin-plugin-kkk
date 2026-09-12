@@ -129,6 +129,7 @@ const baseConfig = {
     maxAutoVideoSize: 50,
     videoInfoMode: 'image',
     displayContent: ['cover', 'title', 'author', 'stats'],
+    longTitleFullTextThreshold: 25,
     burnDanmaku: false,
     danmakuArea: 0.5,
     danmakuFontSize: 'medium',

@@ -16,26 +16,6 @@ import {
 
 import type { SummaryParsePlatform, SummaryResolvedLink, SummaryTrigger } from './types'
 
-type Extractor = {
-  platform: SummaryParsePlatform
-  extract: (message: string) => string | null
-}
-
-const extractors: Extractor[] = [
-  { platform: 'bilibili', extract: extractBilibiliMessageUrl },
-  { platform: 'douyin', extract: extractDouyinMessageUrl },
-  { platform: 'tiktok', extract: extractTikTokMessageUrl },
-  { platform: 'kuaishou', extract: extractKuaishouMessageUrl },
-  { platform: 'xiaohongshu', extract: extractXiaohongshuMessageUrl },
-  { platform: 'heybox', extract: extractHeyBoxMessageUrl },
-  { platform: 'x', extract: extractXMessageUrl },
-  { platform: 'zhihu', extract: extractZhihuMessageUrl },
-  { platform: 'tieba', extract: extractTiebaMessageUrl },
-  { platform: 'wechat', extract: extractWechatMessageUrl },
-  { platform: 'weibo', extract: extractWeiboMessageUrl },
-  { platform: 'github', extract: extractGithubMessageUrl }
-]
-
 const bilibiliTokenRegex = /\b(?:BV[1-9a-zA-Z]{10}|av\d+)\b/ig
 
 export const SUMMARY_COMMAND_PREFIX = '#'
@@ -54,29 +34,6 @@ const normalizeKeywords = (keywords: string[]): string[] => {
     })
 
   return normalized.sort((left, right) => right.length - left.length)
-}
-
-const findAllByRegex = (source: string, regex: RegExp): string[] => {
-  const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`
-  const matcher = new RegExp(regex.source, flags)
-  const result: string[] = []
-
-  for (const match of source.matchAll(matcher)) {
-    const value = match[0]?.trim()
-    if (value) result.push(value)
-  }
-
-  return result
-}
-
-const findAllByExtractor = (
-  source: string,
-  regex: RegExp,
-  extractor: (message: string) => string | null
-): string[] => {
-  return findAllByRegex(source, regex)
-    .map(fragment => extractor(fragment))
-    .filter((item): item is string => Boolean(item))
 }
 
 const dedupeLinks = (links: SummaryResolvedLink[]): SummaryResolvedLink[] => {

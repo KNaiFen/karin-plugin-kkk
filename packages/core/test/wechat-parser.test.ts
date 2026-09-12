@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
   axiosGet: vi.fn(),
@@ -153,6 +153,11 @@ const browserImageMessageHtml = `
 describe('wechat parser', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubEnv('TZ', 'Asia/Shanghai')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('parses standard WeChat article HTML into ordered blocks', () => {

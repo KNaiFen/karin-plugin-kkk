@@ -1,5 +1,3 @@
-import axios from 'node-karin/axios'
-
 import { baseHeaders, buildConfiguredRequestOptions } from '@/module'
 import { Config } from '@/module/utils/Config'
 import { retryWithGuestCookieRecovery } from '@/module/utils/GuestCookieRecovery'
@@ -447,7 +445,7 @@ const assertWeiboStatusResponse = (value: unknown): void => {
   }
 }
 
-const normalizeWeiboStatus = (value: unknown, fallbackUrl?: string): WeiboStatus => {
+const normalizeWeiboStatus = (value: unknown): WeiboStatus => {
   const record = asRecord(value)
   const repostedStatus = record.retweeted_status ? normalizeWeiboStatus(record.retweeted_status) : undefined
   const text = String(record.longTextContent_raw ?? record.text_raw ?? '').trim() || htmlToText(record.longTextContent ?? record.text)
@@ -483,7 +481,7 @@ const normalizeStatusDetail = (value: unknown, url: string): WeiboDetail => {
   return {
     type: 'status',
     url: buildStatusUrl(payload, url),
-    status: normalizeWeiboStatus(payload, url)
+    status: normalizeWeiboStatus(payload)
   }
 }
 

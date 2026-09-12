@@ -8,8 +8,7 @@ import type {
   AxiosRequestConfig,
   AxiosResponse,
   Method,
-  RawAxiosRequestHeaders,
-  ResponseType
+  RawAxiosRequestHeaders
 } from 'node-karin/axios'
 import axios from 'node-karin/axios'
 
@@ -529,7 +528,6 @@ export const executeSafeAxiosRequest = async <T = any> (
   const requester = security.requester ?? executeAxiosRequest
   const visited = new Set<string>()
   let currentUrl = config.url
-  let lastResponse: AxiosResponse<T> | null = null
 
   for (let redirectIndex = 0; redirectIndex <= maxRedirects; redirectIndex += 1) {
     const parsed = await parseAndValidateUrl(currentUrl, profile)
@@ -545,7 +543,6 @@ export const executeSafeAxiosRequest = async <T = any> (
       if (redirectResponse) return redirectResponse
       throw error
     })
-    lastResponse = response
 
     if (response.status >= 300 && response.status < 400) {
       const location = getRedirectLocation(response)

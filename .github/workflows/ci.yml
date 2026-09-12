@@ -62,8 +62,6 @@ jobs:
         run: pnpm --filter karin-plugin-kkk run lint:check
       - name: Typecheck core
         run: pnpm --filter karin-plugin-kkk run typecheck
-      - name: Test core
-        run: pnpm --filter karin-plugin-kkk run test
       - name: Typecheck shared packages
         run: |
           pnpm --dir packages/template exec tsc --noEmit -p tsconfig.app.json
@@ -78,6 +76,8 @@ jobs:
         run: |
           pnpm --filter template run build
           pnpm --filter karin-plugin-kkk run build:runtime
+      - name: Test core
+        run: pnpm --filter karin-plugin-kkk run test
       - name: Pack and verify the exact archive
         run: node scripts/ci-pack.mjs
 
@@ -104,6 +104,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check Node version
         run: pnpm --filter karin-plugin-kkk run check:node
+      - name: Build template and core runtime
+        run: |
+          pnpm --filter template run build
+          pnpm --filter karin-plugin-kkk run build:runtime
       - name: Test core
         run: pnpm --filter karin-plugin-kkk run test
 

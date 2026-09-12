@@ -2,18 +2,23 @@ import fs from 'node:fs'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({
-  tempDir: '/private/tmp/kkk-upload-file-test/',
-  calculateBitrate: vi.fn(),
-  compressVideo: vi.fn(),
-  getVideoFileSize: vi.fn(),
-  getMediaDuration: vi.fn(),
-  karinSendMsg: vi.fn(),
-  contactGroup: vi.fn(),
-  getBot: vi.fn(),
-  loggerError: vi.fn(),
-  loggerWarn: vi.fn()
-}))
+const state = await vi.hoisted(async () => {
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, sep } = await import('node:path')
+  return {
+    tempDir: `${mkdtempSync(join(tmpdir(), 'kkk-upload-file-test-'))}${sep}`,
+    calculateBitrate: vi.fn(),
+    compressVideo: vi.fn(),
+    getVideoFileSize: vi.fn(),
+    getMediaDuration: vi.fn(),
+    karinSendMsg: vi.fn(),
+    contactGroup: vi.fn(),
+    getBot: vi.fn(),
+    loggerError: vi.fn(),
+    loggerWarn: vi.fn()
+  }
+})
 
 vi.mock('node-karin', () => ({
   default: {
@@ -127,8 +132,9 @@ describe('uploadFile compression handling', () => {
     state.getMediaDuration.mockResolvedValue(10)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.useRealTimers()
+    await fs.promises.rm(state.tempDir, { recursive: true, force: true })
   })
 
   it('falls back to the original file when compression does not produce an output file', async () => {

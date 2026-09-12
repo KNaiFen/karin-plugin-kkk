@@ -1,4 +1,4 @@
-import { logger, type Message, segment } from 'node-karin'
+import { logger, type Message } from 'node-karin'
 
 import {
   Base,

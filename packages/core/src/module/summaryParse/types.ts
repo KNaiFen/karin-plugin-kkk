@@ -1,4 +1,4 @@
-import type { ExternalPostCardData, ExternalPostContentBlock } from '@/platform/externalPostCard'
+import type { ExternalPostContentBlock } from '@/platform/externalPostCard'
 import type {
   ParsedPost,
   ParsedPostBlock,

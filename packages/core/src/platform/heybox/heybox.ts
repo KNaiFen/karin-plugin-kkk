@@ -1,4 +1,4 @@
-import { type Message, segment } from 'node-karin'
+import type { Message } from 'node-karin'
 
 import {
   Base,
@@ -61,22 +61,6 @@ const countText = (value: number): string => {
   return String(value)
 }
 
-const buildInfoText = (detail: HeyboxDetail): string => {
-  const lines = [
-    `小黑盒：${detail.title}`,
-    `作者：${detail.author.name}`,
-    `浏览 ${countText(detail.stats.view)} / 点赞 ${countText(detail.stats.like)} / 评论 ${countText(detail.stats.comment)} / 收藏 ${countText(detail.stats.collect)}`,
-    detail.url
-  ]
-  const texts = detail.content.filter(part => part.type === 'text').map(part => part.text).join('\n').trim()
-  if (texts) {
-    lines.splice(2, 0, texts.length > 500 ? `${texts.slice(0, 500)}...` : texts)
-  } else if (detail.description) {
-    lines.splice(2, 0, detail.description)
-  }
-  return lines.filter(Boolean).join('\n')
-}
-
 const buildCommentText = (detail: HeyboxDetail): string => {
   if (detail.comments.length === 0) return '这个小黑盒帖子没有评论 ~'
   const lines = [`小黑盒热评（${detail.comments.length}）`]
@@ -90,11 +74,6 @@ const buildCommentText = (detail: HeyboxDetail): string => {
     lines.push(`${index + 1}. ${comment.author.name}：${text || '[图片]'}（赞 ${countText(comment.stats.like)} / 回复 ${countText(comment.stats.reply)}）`)
   }
   return lines.join('\n')
-}
-
-const safeVideoTitle = (title: string, linkId: string): string => {
-  const safeTitle = title.substring(0, 80).replace(/[\\/:*?"<>|\r\n]/g, ' ').trim()
-  return safeTitle || `Heybox_${linkId}`
 }
 
 export class Heybox extends Base {

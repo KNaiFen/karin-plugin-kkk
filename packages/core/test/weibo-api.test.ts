@@ -16,6 +16,12 @@ const state = vi.hoisted(() => ({
   }
 }))
 
+vi.mock('node:dns/promises', () => ({
+  default: {
+    lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }])
+  }
+}))
+
 vi.mock('node-karin/axios', () => ({
   default: {
     get: state.axiosGet,
@@ -43,6 +49,12 @@ vi.mock('@/module', () => ({
 
 vi.mock('@/module/utils/Config', () => ({
   Config: state.config
+}))
+
+vi.mock('@/module/utils/GuestCookieManager', () => ({
+  guestCookieManager: {
+    refreshPlatform: vi.fn(async () => false)
+  }
 }))
 
 const { fetchWeiboDetail } = await import('../src/platform/weibo/api')

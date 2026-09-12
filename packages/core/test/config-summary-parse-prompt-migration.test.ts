@@ -1,5 +1,3 @@
-import fs from 'node:fs'
-
 import YAML from 'node-karin/yaml'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 

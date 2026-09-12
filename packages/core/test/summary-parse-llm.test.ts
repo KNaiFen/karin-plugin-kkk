@@ -632,7 +632,6 @@ describe('summary parse llm payloads', () => {
       }
     ])
 
-    const payload = getPostedPayload(state.fetch.mock.calls.length - 1)
     expect(getPostedUserContent(state.fetch.mock.calls.length - 1)).toEqual([
       { type: 'input_text', text: expect.stringContaining('平台：微博') },
       { type: 'input_text', text: '图片：封面' }

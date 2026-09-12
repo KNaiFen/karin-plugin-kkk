@@ -1,4 +1,4 @@
-import { logger, type Message, segment } from 'node-karin'
+import type { Message } from 'node-karin'
 
 import {
   Base,
@@ -9,9 +9,7 @@ import {
 import { resolveParsedPostWithCache } from '@/module/summaryParse/parsedPostCache'
 import { Config } from '@/module/utils/Config'
 import { replyAndRecordLongTaskCompletionAnchor } from '@/module/utils/LongTaskCompletionNotify'
-import { executeSafeAxiosRequest } from '@/module/utils/OutboundRequest'
 
-import type { ExternalPostContentBlock } from '../externalPostCard'
 import { renderExternalPostCard } from '../externalPostCard'
 import {
   buildExternalPostCardFromParsedPost,
@@ -20,10 +18,7 @@ import {
   buildParsedPostVideoDownloadEntries
 } from '../parsedPostAdapters'
 import { prepareParsedPostForCardRender } from '../parsedPostAssets'
-import {
-  buildWeiboCredentialHeaders,
-  shouldPrefetchWeiboMedia
-} from './api'
+import { buildWeiboCredentialHeaders } from './api'
 import type { WeiboIdData } from './types'
 
 type WeiboRuntimeConfig = typeof Config & {
@@ -54,113 +49,6 @@ const getRenderCardConfig = (): { enable: boolean, includeImages: boolean } => {
     enable: renderCard?.enable !== false,
     includeImages: renderCard?.includeImages === true
   }
-}
-
-const normalizeImageContentType = (value: unknown): string => {
-  const contentType = String(value ?? '').trim().toLowerCase()
-  if (contentType.startsWith('image/')) return contentType.split(';')[0]
-  return 'image/jpeg'
-}
-
-const isEmbeddedRenderableImage = (value: string): boolean => {
-  return value.startsWith('data:image/') || value.startsWith('base64://') || value.startsWith('file://')
-}
-
-const toRenderDataUrl = async (url: string, referer: string): Promise<string> => {
-  if (!url || isEmbeddedRenderableImage(url)) return url
-  if (!shouldPrefetchWeiboMedia(url)) {
-    throw new Error(`微博媒体地址不在白名单内，已拒绝预取: ${url}`)
-  }
-
-  const { response } = await executeSafeAxiosRequest({
-    url,
-    method: 'GET',
-    responseType: 'arraybuffer',
-    timeout: 15000,
-    headers: buildWeiboCredentialHeaders(url, referer)
-  }, {
-    profile: 'weibo-media'
-  })
-  const mime = normalizeImageContentType(response.headers?.['content-type'])
-  const buffer = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data)
-  return `data:${mime};base64,${buffer.toString('base64')}`
-}
-
-const toReplyImageUrl = async (url: string, referer: string): Promise<string> => {
-  const dataUrl = await toRenderDataUrl(url, referer)
-  const base64Prefix = ';base64,'
-  if (!dataUrl.startsWith('data:image/') || !dataUrl.includes(base64Prefix)) return dataUrl
-  return `base64://${dataUrl.slice(dataUrl.indexOf(base64Prefix) + base64Prefix.length)}`
-}
-
-type WeiboRenderAssetResolver = (url: string) => Promise<string>
-
-const createRenderAssetResolver = (referer: string): WeiboRenderAssetResolver => {
-  const cache = new Map<string, Promise<string>>()
-
-  return async (url: string) => {
-    if (!url || isEmbeddedRenderableImage(url)) return url
-
-    const cached = cache.get(url)
-    if (cached) return await cached
-
-    const task = toRenderDataUrl(url, referer)
-    cache.set(url, task)
-    return await task
-  }
-}
-
-const normalizeTitle = (value: string, fallback: string): string => {
-  const safeTitle = value.substring(0, 80).replace(/[\\/:*?"<>|\r\n]/g, ' ').trim()
-  return safeTitle || fallback
-}
-
-const getWeiboImageIdentity = (value: string): string => {
-  const normalized = value.trim()
-  if (!normalized) return ''
-  if (normalized.startsWith('data:image/') || normalized.startsWith('base64://') || normalized.startsWith('file://')) {
-    return normalized
-  }
-
-  try {
-    const parsed = new URL(normalized)
-    return parsed.pathname.split('/').filter(Boolean).at(-1)?.toLowerCase() ?? normalized.toLowerCase()
-  } catch {
-    return normalized.split('?')[0].split('/').filter(Boolean).at(-1)?.toLowerCase() ?? normalized.toLowerCase()
-  }
-}
-
-const dedupeWeiboImages = (images: string[]): string[] => {
-  const seen = new Set<string>()
-  const deduped: string[] = []
-
-  for (const image of images) {
-    const identity = getWeiboImageIdentity(image)
-    if (!identity || seen.has(identity)) continue
-    seen.add(identity)
-    deduped.push(image)
-  }
-
-  return deduped
-}
-
-const dedupeWeiboImageBlocks = (blocks: ExternalPostContentBlock[]): ExternalPostContentBlock[] => {
-  const seen = new Set<string>()
-  const deduped: ExternalPostContentBlock[] = []
-
-  for (const block of blocks) {
-    if (block.type !== 'image') {
-      deduped.push(block)
-      continue
-    }
-
-    const identity = getWeiboImageIdentity(block.url)
-    if (!identity || seen.has(identity)) continue
-    seen.add(identity)
-    deduped.push(block)
-  }
-
-  return deduped
 }
 
 export class Weibo extends Base {
