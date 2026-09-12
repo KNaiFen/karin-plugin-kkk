@@ -18,6 +18,18 @@ compresstrigger: 80
 # 压缩后的值，若视频文件大小大于「触发视频压缩的阈值」的值，则会进行压缩至该值（±5%），「压缩视频」开启后才会生效
 compressvalue: 30
 
+# 视频压制编码预设
+#  - auto: 自动探测 NVIDIA / Intel / AMD H.265 GPU 编码器，失败后回退 CPU
+#  - nvidia: NVIDIA NVENC H.265（最大码率受目标大小限制）
+#  - intel: Intel QSV H.265 固定码率模式
+#  - amd: AMD AMF H.265 固定码率模式
+#  - cpu: CPU libx265
+#  - custom: 使用 customEncodeArgs 自定义完整视频编码参数
+compressPreset: auto
+
+# 自定义视频编码参数，仅在 compressPreset 为 custom 时生效
+compressCustomArgs: ''
+
 # 使用文件上传，开启后会将视频文件上传到群文件中，私聊也行
 # 与「videoSendMode: base64」互斥（群文件上传仅支持 file 协议）
 usegroupfile: false

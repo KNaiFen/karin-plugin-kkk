@@ -1,0 +1,31 @@
+# TikTok 解析开关，单独开关
+switch: true
+
+# TikTok 默认解析，即识别最高优先级；不受「插件应用相关」里的全局默认解析影响，修改后重启生效
+videoTool: true
+
+# TikTok 自定义优先级，「TikTok 默认解析」关闭后才会生效。修改后重启生效
+priority: 800
+
+# 当消息内容只有 TikTok 链接时，解析成功后额外发送「【TikTok】作者：标题」
+plainTitleReply:
+  switch: true
+  types:
+    - video
+
+# TikTok 专用代理配置；只影响 TikTok 解析、下载和游客 Cookie 获取，不影响全局请求代理
+proxy:
+  # 是否启用 TikTok 专用代理
+  switch: false
+  # 代理服务器主机地址
+  host: ''
+  # 代理服务器端口
+  port: ''
+  # 代理协议类型(http/https)
+  protocol: 'http'
+  # 代理服务器认证信息
+  auth:
+    # 用户名
+    username: ''
+    # 密码
+    password: ''

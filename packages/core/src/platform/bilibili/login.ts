@@ -6,17 +6,13 @@ import { common } from 'node-karin'
 
 import { Common, Render } from '@/module/utils'
 import { bilibiliFetcher } from '@/module/utils/amagiClient'
-import { resolveTriggerAvatarUrl } from '@/module/utils/bot'
 import { Config } from '@/module/utils/Config'
 
 /** B站登录 */
 export const bilibiliLogin = async (e: Message) => {
   /** 申请二维码 */
   const qrcodeurl = await bilibiliFetcher.requestLoginQrcode({ typeMode: 'strict' })
-  const qrimg = await Render(e, 'bilibili/qrcodeImg', {
-    share_url: qrcodeurl.data.data.url,
-    avatarUrl: await resolveTriggerAvatarUrl(e)
-  })
+  const qrimg = await Render(e, 'bilibili/qrcodeImg', { share_url: qrcodeurl.data.data.url })
 
   const base64Data = qrimg[0]?.file
   if (!base64Data) {
@@ -37,13 +33,11 @@ export const bilibiliLogin = async (e: Message) => {
    * 批量撤回消息
    */
   const recallMessages = async () => {
-    await Promise.all(
-      messageIds.map(async (id) => {
-        try {
-          await e.bot.recallMsg(e.contact, id)
-        } catch {}
-      })
-    )
+    await Promise.all(messageIds.map(async (id) => {
+      try {
+        await e.bot.recallMsg(e.contact, id)
+      } catch { }
+    }))
   }
 
   const handleLoginSuccess = async (responseData: Result<BiliCheckQrcode>) => {
@@ -56,8 +50,8 @@ export const bilibiliLogin = async (e: Message) => {
       cookieString = setCookieHeader || ''
     }
 
-    Config.Modify('amagi', 'cookies.bilibili', cookieString)
-    await e.reply('登录成功！用户登录凭证已保存至配置', { reply: true })
+    Config.Modify('cookies', 'bilibili', cookieString)
+    await e.reply('登录成功！用户登录凭证已保存至cookies.yaml', { reply: true })
     await recallMessages()
   }
 
@@ -71,7 +65,7 @@ export const bilibiliLogin = async (e: Message) => {
     // 撤回原二维码消息
     try {
       await e.bot.recallMsg(e.contact, qrcodeMsg.messageId)
-    } catch {}
+    } catch { }
 
     // 从消息ID列表中移除已撤回的消息
     const index = messageIds.indexOf(qrcodeMsg.messageId)

@@ -1,4 +1,9 @@
 {
   "title": "指南",
-  "pages": ["quick-start", "configuration", "usage", "faq"]
+  "pages": [
+    "quick-start",
+    "configuration",
+    "usage",
+    "faq"
+  ]
 }

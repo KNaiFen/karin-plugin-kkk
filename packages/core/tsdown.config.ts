@@ -1,30 +1,29 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  entry: {
-    template: 'src/export/template.ts',
-    richtext: 'src/export/richtext.ts',
-    amagi: 'src/export/amagi.ts'
-  },
+  entry: ['src/export/richtext.ts'],
+  format: ['esm'],
+  target: 'es2022',
   outDir: 'lib/core_chunk',
-  // tsdown 在 vite build 之后运行，不能清空 vite 已产出的 JS
-  clean: false,
+  root: 'src/export',
   deps: {
     onlyBundle: false,
-    neverBundle: ['axios', 'zod', '@karinjs/template-react']
+    neverBundle: ['axios']
   },
   dts: {
     emitDtsOnly: true,
-    // core 的 tsconfig 带 references，会触发 tsc -b 构建模式，这里绕开并内联声明所需的路径映射
+    build: false,
+    resolver: 'oxc',
     tsconfig: false,
     compilerOptions: {
       baseUrl: '.',
       moduleResolution: 'bundler',
       paths: {
         '@kkk/richtext': ['../richtext/src/index.ts'],
-        '@template/*': ['./template/*'],
-        '@ikenxuan/amagi': ['../amagi/packages/core/src/index.ts']
+        '@kkk/template-contracts': ['../template-contracts/src/index.ts'],
+        'template/server': ['../template/src/server.ts']
       }
     }
-  }
+  },
+  clean: false
 })

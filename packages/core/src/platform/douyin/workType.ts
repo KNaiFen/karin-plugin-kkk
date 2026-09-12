@@ -6,6 +6,8 @@
 /**
  * 抖音作品主类型
  */
+import { normalizeDouyinArticleContent } from './articleContent'
+
 export enum DouyinWorkMainType {
   /** 视频作品 */
   VIDEO = 'video',
@@ -55,11 +57,31 @@ export interface DouyinWorkTypeInfo {
   templatePath: 'douyin/video-work' | 'douyin/image-work' | 'douyin/article-work' | 'douyin/live'
 }
 
-export type DouyinLivePhotoMode = 'video_and_livephoto' | 'video_only' | 'livephoto_only'
+type DouyinVideoAddr = {
+  uri?: string
+  url_list?: string[]
+}
 
-export interface DouyinLiveImageSendPolicy {
-  shouldGenerateVideo: boolean
-  shouldGenerateLivePhoto: boolean
+type DouyinVideoLike = {
+  play_addr_h264?: DouyinVideoAddr
+  play_addr?: DouyinVideoAddr
+  bit_rate?: Array<{
+    play_addr?: DouyinVideoAddr
+  }>
+}
+
+type DouyinMusicAddr = {
+  uri?: string
+  url_list?: string[]
+}
+
+type DouyinMusicLike = {
+  play_url?: DouyinMusicAddr
+  playUrl?: {
+    uri?: string
+    urlList?: string[]
+  }
+  extra?: string
 }
 
 /**
@@ -116,7 +138,9 @@ export function getWorkTypeInfo(data: {
 
   // 图文类型（有 images 数组）
   if (data.images && data.images.length > 0) {
-    const subType = data.is_slides === true ? DouyinImageSubType.COLLECTION : DouyinImageSubType.GALLERY
+    const subType = data.is_slides === true 
+      ? DouyinImageSubType.COLLECTION 
+      : DouyinImageSubType.GALLERY
 
     return {
       mainType: DouyinWorkMainType.IMAGE,
@@ -144,9 +168,6 @@ export function getWorkTypeInfo(data: {
   }
 }
 
-/** 抖音图床低分辨率处理模板（如 ~tplv-dy-360p.jpeg），命中说明该封面 URL 被 CDN 降质 */
-const LOW_RES_COVER_PATTERN = /~tplv-[^/?]*(?:270p|360p|480p|540p)/i
-
 /**
  * 获取作品封面 URL
  */
@@ -156,10 +177,9 @@ export function getWorkCoverUrl(
     video?: {
       animated_cover?: { url_list: string[] }
       cover_original_scale?: { url_list: string[] }
-      origin_cover?: { url_list: string[] }
       cover?: { url_list: string[] }
     }
-    images?: Array<{ url_list: string[] }> | null
+    images?: Array<{ url_list: string[] }>
     article_info?: {
       article_content?: string
     }
@@ -167,13 +187,12 @@ export function getWorkCoverUrl(
 ): string {
   // 视频封面
   if (workTypeInfo.isVideo && data.video) {
-    // 详情接口没有 animated_cover，会落到 cover_original_scale，
-    // 而它的 url_list[0] 常是 ~tplv-dy-360p 这类 CDN 降质模板（签名绑定路径，无法改 URL 还原）。
-    // 所以按优先级收集所有候选后，优先取未命中低清模板的；全部命中时维持原优先级兜底。
-    const candidates = [data.video.animated_cover, data.video.cover_original_scale, data.video.origin_cover, data.video.cover].flatMap(
-      (field) => field?.url_list ?? []
+    return (
+      data.video.animated_cover?.url_list[0] ??
+      data.video.cover_original_scale?.url_list[0] ??
+      data.video.cover?.url_list[0] ??
+      ''
     )
-    return candidates.find((url) => !LOW_RES_COVER_PATTERN.test(url)) ?? candidates[0] ?? ''
   }
 
   // 图文封面
@@ -182,13 +201,8 @@ export function getWorkCoverUrl(
   }
 
   // 文章封面
-  if (workTypeInfo.isArticle && data.article_info?.article_content) {
-    try {
-      const content = JSON.parse(data.article_info.article_content)
-      return content.head_poster_list?.url_list?.[0] ?? ''
-    } catch {
-      return ''
-    }
+  if (workTypeInfo.isArticle) {
+    return normalizeDouyinArticleContent(data as Record<string, any>).coverUrl
   }
 
   return ''
@@ -209,27 +223,202 @@ export function getWorkTypeDisplayName(workTypeInfo: DouyinWorkTypeInfo): string
 /**
  * 判断是否需要特殊处理（如 live 图）
  */
-export function needsSpecialImageProcessing(workTypeInfo: DouyinWorkTypeInfo, images?: Array<{ clip_type?: number }>): boolean {
+export function needsSpecialImageProcessing(
+  workTypeInfo: DouyinWorkTypeInfo,
+  images?: Array<{ clip_type?: number }>
+): boolean {
   if (!workTypeInfo.isImage || !images) return false
-
+  
   // 检查是否包含 live 图（clip_type !== 2）
-  return images.some((item) => item.clip_type !== 2 && item.clip_type !== undefined)
+  return images.some(item => item.clip_type !== 2 && item.clip_type !== undefined)
+}
+
+const ABSOLUTE_URL_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i
+const DOUYIN_WRAPPED_VIDEO_PATH_PATTERN = /^\/aweme\/v1\/playwm?\/?$/i
+
+const toTrimmedString = (value: unknown): string => {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+const toStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return []
+  return value
+    .map(item => toTrimmedString(item))
+    .filter(Boolean)
+}
+
+const dedupeStrings = (items: string[]): string[] => {
+  return Array.from(new Set(items.filter(Boolean)))
+}
+
+const isAbsoluteUrl = (value: string): boolean => ABSOLUTE_URL_PATTERN.test(value)
+
+export function isDouyinWrappedVideoUrl (value: unknown): boolean {
+  const normalized = toTrimmedString(value)
+  if (!normalized || !isAbsoluteUrl(normalized)) return false
+
+  try {
+    return DOUYIN_WRAPPED_VIDEO_PATH_PATTERN.test(new URL(normalized).pathname)
+  } catch {
+    return false
+  }
+}
+
+export function normalizeDouyinPlayableVideoUrl (value: unknown): string {
+  const normalized = toTrimmedString(value)
+  if (!normalized || !isAbsoluteUrl(normalized)) return normalized
+
+  try {
+    const parsed = new URL(normalized)
+    if (!DOUYIN_WRAPPED_VIDEO_PATH_PATTERN.test(parsed.pathname)) {
+      return normalized
+    }
+
+    const videoId = toTrimmedString(parsed.searchParams.get('video_id'))
+    return isAbsoluteUrl(videoId) ? videoId : normalized
+  } catch {
+    return normalized
+  }
+}
+
+export function normalizeDouyinPlayableAbsoluteUrl (value: unknown): string {
+  const normalized = normalizeDouyinPlayableVideoUrl(value)
+  return isAbsoluteUrl(normalized) ? normalized : ''
+}
+
+export function normalizeDouyinPlayableMusicUrl (value: unknown): string {
+  const normalized = normalizeDouyinPlayableAbsoluteUrl(value)
+  if (!normalized) return ''
+
+  try {
+    const parsed = new URL(normalized)
+    if (/\/obj\/ies-music\/[^/]+\.mp3$/i.test(parsed.pathname) && !parsed.search) {
+      parsed.searchParams.set('is_ssr', '1')
+    }
+    return parsed.toString()
+  } catch {
+    return normalized
+  }
+}
+
+const safeParseDouyinMusicExtra = (value: unknown): { original_song_url?: unknown } => {
+  if (typeof value !== 'string' || !value.trim()) return {}
+
+  try {
+    return JSON.parse(value) as { original_song_url?: unknown }
+  } catch {
+    return {}
+  }
+}
+
+export function resolveDouyinPlayableMusicUrls (music?: DouyinMusicLike | null): string[] {
+  const extra = safeParseDouyinMusicExtra(music?.extra)
+
+  return dedupeStrings([
+    ...toStringArray(music?.play_url?.url_list).map(item => normalizeDouyinPlayableMusicUrl(item)),
+    ...toStringArray(music?.playUrl?.urlList).map(item => normalizeDouyinPlayableMusicUrl(item)),
+    normalizeDouyinPlayableMusicUrl(extra.original_song_url),
+    normalizeDouyinPlayableMusicUrl(music?.play_url?.uri),
+    normalizeDouyinPlayableMusicUrl(music?.playUrl?.uri)
+  ].filter(Boolean))
+}
+
+const normalizeDirectAbsoluteUri = (value: unknown): string => {
+  return normalizeDouyinPlayableAbsoluteUrl(value)
+}
+
+const prioritizeDirectPlayableUrls = (urls: string[]): string[] => {
+  const unique = dedupeStrings(urls)
+  const direct = unique.filter(url => !isDouyinWrappedVideoUrl(url))
+  const wrapped = unique.filter(url => isDouyinWrappedVideoUrl(url))
+  return [...direct, ...wrapped]
+}
+
+export function resolveDouyinPlayableVideoUrls (video?: DouyinVideoLike | null): string[] {
+  const wrappedUriCandidates = Array.isArray(video?.bit_rate)
+    ? video.bit_rate
+      .map(item => normalizeDouyinVideoUri(item?.play_addr?.uri))
+      .filter(Boolean)
+    : []
+  const wrappedUrlCandidates = [
+    ...wrappedUriCandidates,
+    normalizeDouyinVideoUri(video?.play_addr_h264?.uri),
+    normalizeDouyinVideoUri(video?.play_addr?.uri)
+  ]
+    .filter(Boolean)
+    .map(uri => buildDouyinWrappedVideoUrl(uri))
+  const bitrateUrlCandidates = Array.isArray(video?.bit_rate)
+    ? video.bit_rate.flatMap(item => toStringArray(item?.play_addr?.url_list))
+    : []
+  const directUriCandidates = Array.isArray(video?.bit_rate)
+    ? video.bit_rate
+      .map(item => normalizeDirectAbsoluteUri(item?.play_addr?.uri))
+      .filter(Boolean)
+    : []
+
+  const rawCandidates = [
+    ...bitrateUrlCandidates,
+    ...toStringArray(video?.play_addr_h264?.url_list),
+    ...toStringArray(video?.play_addr?.url_list),
+    ...directUriCandidates,
+    ...wrappedUrlCandidates,
+    normalizeDirectAbsoluteUri(video?.play_addr_h264?.uri),
+    normalizeDirectAbsoluteUri(video?.play_addr?.uri)
+  ]
+
+  return prioritizeDirectPlayableUrls(
+    rawCandidates
+      .map(candidate => normalizeDouyinPlayableVideoUrl(candidate))
+      .filter(Boolean)
+  )
 }
 
 /**
- * 抖音图文里的 clip_type=5 才能生成系统实况图；clip_type=4 是短片。
- * 用户选择仅发送实况图时，短片仍需兜底成视频节点，避免生成空合并转发。
+ * 获取抖音视频可下载地址。
+ * 优先使用接口直接返回的签名直链，缺失时再回退 aweme 包装链接。
  */
-export function getDouyinLiveImageSendPolicy(
-  clipType: number | undefined,
-  livePhotoMode: DouyinLivePhotoMode = 'video_and_livephoto'
-): DouyinLiveImageSendPolicy {
-  const isStaticImage = clipType === 2 || clipType === undefined
-  const canGenerateLivePhoto = clipType === 5
-  const shouldFallbackToVideo = livePhotoMode === 'livephoto_only' && !isStaticImage && !canGenerateLivePhoto
+export function getDouyinPlayableVideoUrl (video?: {
+  bit_rate?: Array<{ play_addr?: { uri?: string, url_list?: string[] } }>
+  play_addr_h264?: { uri?: string, url_list?: string[] }
+  play_addr?: { uri?: string, url_list?: string[] }
+} | null): string {
+  const directUrl = resolveDouyinPlayableVideoUrls(video)[0]
 
-  return {
-    shouldGenerateVideo: livePhotoMode === 'video_and_livephoto' || livePhotoMode === 'video_only' || shouldFallbackToVideo,
-    shouldGenerateLivePhoto: canGenerateLivePhoto && (livePhotoMode === 'video_and_livephoto' || livePhotoMode === 'livephoto_only')
-  }
+  if (directUrl) return directUrl
+
+  const bitrateUri = Array.isArray(video?.bit_rate)
+    ? video.bit_rate
+      .map(item => normalizeDouyinVideoUri(item?.play_addr?.uri))
+      .find(Boolean)
+    : ''
+  const uri = bitrateUri ||
+    normalizeDouyinVideoUri(video?.play_addr_h264?.uri) ||
+    normalizeDouyinVideoUri(video?.play_addr?.uri)
+  return uri ? buildDouyinWrappedVideoUrl(uri) : ''
+}
+
+export function normalizeDouyinVideoUri (value: unknown): string {
+  if (typeof value !== 'string') return ''
+
+  const normalized = value.trim()
+  if (!normalized) return ''
+  if (ABSOLUTE_URL_PATTERN.test(normalized)) return ''
+  if (/[/\\?&#=\s]/.test(normalized)) return ''
+
+  return normalized
+}
+
+const buildDouyinWrappedVideoUrl = (uri: string): string =>
+  `https://aweme.snssdk.com/aweme/v1/play/?video_id=${uri}&ratio=1080p&line=0`
+
+export function getDouyinShareableVideoUrl (video?: {
+  play_addr_h264?: { uri?: string, url_list?: string[] }
+  play_addr?: { uri?: string, url_list?: string[] }
+} | null): string {
+  const uri = normalizeDouyinVideoUri(video?.play_addr_h264?.uri) ||
+    normalizeDouyinVideoUri(video?.play_addr?.uri)
+
+  if (uri) return buildDouyinWrappedVideoUrl(uri)
+
+  return getDouyinPlayableVideoUrl(video)
 }

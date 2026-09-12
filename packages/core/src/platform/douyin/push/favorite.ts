@@ -3,27 +3,29 @@ import { logger } from 'node-karin'
 
 import { douyinDB } from '@/module'
 import { douyinFetcher } from '@/module/utils/amagiClient'
-import { buildDouyinWorkDetail } from '@/platform/douyin/types'
 import { douyinPushItem } from '@/types/config/pushlist'
 
-import type { DouyinWorkPushItem } from './types'
+import type { DouyinPushItem } from './types'
 
 /**
  * 处理喜欢列表推送
  * 通过对比aweme_id判断是否有新增的喜欢作品
  * @returns 返回需要推送的作品项数组
  */
-export async function processFavoriteList(
+export async function processFavoriteList (
   contentList: any[],
   sec_uid: string,
   userinfo: Result<DyUserInfo>,
   item: douyinPushItem,
-  targets: Array<{ groupId: string; botId: string }>,
+  targets: Array<{ groupId: string, botId: string }>,
   force: boolean = false
-): Promise<DouyinWorkPushItem[]> {
+): Promise<DouyinPushItem[]> {
   const pushType = 'favorite'
   const listName = '喜欢列表'
-  const result: DouyinWorkPushItem[] = []
+  const result: DouyinPushItem[] = []
+  let skippedPushedTargetCount = 0
+  let skippedNewSubscriberTargetCount = 0
+  let noValidTargetItemCount = 0
 
   // 获取所有目标群组的历史状态
   const groupHistoryStatus = new Map<string, boolean>()
@@ -34,7 +36,7 @@ export async function processFavoriteList(
 
   for (const [index, aweme] of contentList.entries()) {
     // 过滤掉已经推送过的群组
-    const validTargets: Array<{ groupId: string; botId: string }> = []
+    const validTargets: Array<{ groupId: string, botId: string }> = []
     for (const target of targets) {
       const isPushed = await douyinDB.isAwemePushed(aweme.aweme_id, sec_uid, target.groupId, pushType)
       if (!isPushed) {
@@ -45,13 +47,17 @@ export async function processFavoriteList(
         } else {
           // 如果是新订阅者且不是最新作品，则不推送，但写入缓存避免下次重复推送
           await douyinDB.addAwemeCache(aweme.aweme_id, sec_uid, target.groupId, pushType)
+          skippedNewSubscriberTargetCount++
           logger.debug(`新订阅群组 ${target.groupId} 跳过旧作品 ${aweme.aweme_id} 并已标记为已读`)
         }
+      } else {
+        skippedPushedTargetCount++
       }
     }
 
     // 如果所有群组都已推送过（或被跳过），则跳过
     if (validTargets.length === 0) {
+      noValidTargetItemCount++
       continue
     }
 
@@ -76,8 +82,11 @@ export async function processFavoriteList(
       create_time: aweme.create_time,
       targets: validTargets,
       pushType,
-      // user_info 是点赞者（订阅者）的信息，author_user_info 是作品作者的信息
-      Detail_Data: buildDouyinWorkDetail(aweme, { user_info: userinfo, author_user_info: authorUserInfo }),
+      Detail_Data: {
+        ...aweme,
+        user_info: userinfo, // 点赞者（订阅者）的信息
+        author_user_info: authorUserInfo // 作品作者的信息
+      },
       avatar_img: 'https://p3-pc.douyinpic.com/aweme/1080x1080/' + userinfo.data.user.avatar_larger.uri,
       living: false
     })
@@ -86,11 +95,8 @@ export async function processFavoriteList(
   }
 
   // 更新列表快照
-  await douyinDB.updateListSnapshot(
-    sec_uid,
-    pushType,
-    contentList.map((a) => a.aweme_id)
-  )
+  await douyinDB.updateListSnapshot(sec_uid, pushType, contentList.map(a => a.aweme_id))
+  logger.info(`[DouYinPush] ${item.remark ?? sec_uid} ${listName}筛选汇总：接口返回 ${contentList.length} 条，最终待推送 ${result.length} 条，目标群已推送 ${skippedPushedTargetCount} 次，新订阅跳过旧作品 ${skippedNewSubscriberTargetCount} 次，无有效目标作品 ${noValidTargetItemCount} 条`)
 
   return result
 }

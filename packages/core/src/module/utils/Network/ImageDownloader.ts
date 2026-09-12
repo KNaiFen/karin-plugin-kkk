@@ -5,6 +5,10 @@ import { logger } from 'node-karin'
 import type { AxiosInstance } from 'node-karin/axios'
 
 import { Config } from '../Config'
+import {
+  buildSharedCacheFilename,
+  type CacheIdentity
+} from '../sharedCache'
 import { sanitizeFilename } from './helpers'
 
 /**
@@ -28,6 +32,7 @@ export interface ImageDownloadResult {
 export class ImageDownloader {
   private axiosInstance: AxiosInstance
   private tempDir: string
+  private sharedCacheDir: string
   private readonly maxRetries: number = 3
   private readonly retryDelay: number = 1000 // 初始重试延迟（毫秒）
 
@@ -36,13 +41,17 @@ export class ImageDownloader {
    * @param axiosInstance - Axios 实例
    * @param tempDir - 临时文件目录
    */
-  constructor(axiosInstance: AxiosInstance, tempDir: string) {
+  constructor(axiosInstance: AxiosInstance, tempDir: string, sharedCacheDir?: string) {
     this.axiosInstance = axiosInstance
     this.tempDir = tempDir
+    this.sharedCacheDir = sharedCacheDir ?? tempDir
 
     // 确保临时目录存在
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true })
+    }
+    if (!fs.existsSync(this.sharedCacheDir)) {
+      fs.mkdirSync(this.sharedCacheDir, { recursive: true })
     }
   }
 
@@ -53,18 +62,19 @@ export class ImageDownloader {
    * @param index - 图片索引（用于多图场景）
    * @returns 处理后的图片路径（HTTP URL / file:// 协议 / base64://）
    */
-  async processImage(imageUrl: string, title?: string, index?: number): Promise<string> {
-    if (!/^https?:\/\//i.test(imageUrl)) {
-      return imageUrl
-    }
-
-    const mode = Config.app.imageSendMode
+  async processImage(
+    imageUrl: string,
+    title?: string,
+    index?: number,
+    cacheIdentity?: CacheIdentity
+  ): Promise<string> {
+    const mode = Config.upload.imageSendMode
 
     switch (mode) {
       case 'base64':
         // base64 模式：下载并转换为 base64
         try {
-          return await this.downloadAndConvertToBase64(imageUrl)
+          return await this.downloadAndConvertToBase64(imageUrl, title, index, cacheIdentity)
         } catch (error) {
           logger.error(`图片转换 base64 失败，回退到原始 URL: ${imageUrl}`, error)
           return imageUrl
@@ -73,8 +83,8 @@ export class ImageDownloader {
       case 'file':
         // file 协议模式：下载到本地并返回 file:// 协议
         try {
-          const result = await this.downloadImage(imageUrl, title, index)
-
+          const result = await this.downloadImage(imageUrl, title, index, cacheIdentity)
+          
           // 如果需要自动删除，设置延迟删除任务
           if (result.shouldDelete) {
             this.scheduleDelete(result.filePath)
@@ -98,20 +108,25 @@ export class ImageDownloader {
    * @param imageUrl - 图片 URL
    * @returns base64 格式的图片数据
    */
-  private async downloadAndConvertToBase64(imageUrl: string): Promise<string> {
-    // 生成临时文件名
-    const filename = this.generateFilename(imageUrl)
+  private async downloadAndConvertToBase64(
+    imageUrl: string,
+    title?: string,
+    index?: number,
+    cacheIdentity?: CacheIdentity
+  ): Promise<string> {
+    const sharedCachePath = this.resolveSharedCachePath(imageUrl, cacheIdentity)
+    const filename = this.generateFilename(imageUrl, title, index)
     const filePath = path.join(this.tempDir, filename)
+    const sourcePath = sharedCachePath ?? filePath
 
     try {
-      // 下载图片到本地（带重试）
-      const response = await this.downloadWithRetry(imageUrl)
-
-      // 保存到本地
-      fs.writeFileSync(filePath, response.data)
+      if (!fs.existsSync(sourcePath)) {
+        const response = await this.downloadWithRetry(imageUrl)
+        fs.writeFileSync(sourcePath, response.data)
+      }
 
       // 从本地文件读取并转换为 base64
-      const fileBuffer = fs.readFileSync(filePath)
+      const fileBuffer = fs.readFileSync(sourcePath)
       const base64 = fileBuffer.toString('base64')
 
       logger.debug(`图片已下载并转换为 base64: ${imageUrl.substring(0, 50)}...`)
@@ -119,7 +134,7 @@ export class ImageDownloader {
       return `base64://${base64}`
     } finally {
       // 如果配置了自动删除缓存，立即删除临时文件
-      if (Config.app.removeCache && fs.existsSync(filePath)) {
+      if (!sharedCachePath && Config.app.removeCache && fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath)
           logger.debug(`临时文件已删除: ${filePath}`)
@@ -130,6 +145,7 @@ export class ImageDownloader {
     }
   }
 
+
   /**
    * 下载图片到本地
    * @param imageUrl - 图片 URL
@@ -137,16 +153,33 @@ export class ImageDownloader {
    * @param index - 图片索引
    * @returns 下载结果
    */
-  private async downloadImage(imageUrl: string, title?: string, index?: number): Promise<ImageDownloadResult> {
+  private async downloadImage(
+    imageUrl: string,
+    title?: string,
+    index?: number,
+    cacheIdentity?: CacheIdentity
+  ): Promise<ImageDownloadResult> {
     // 生成文件名
     const filename = this.generateFilename(imageUrl, title, index)
     const filePath = path.join(this.tempDir, filename)
+    const sharedCachePath = this.resolveSharedCachePath(imageUrl, cacheIdentity)
 
-    // 下载图片（带重试）
+    if (sharedCachePath && fs.existsSync(sharedCachePath)) {
+      this.copySharedCacheToTarget(sharedCachePath, filePath)
+      logger.debug(`图片已从共享缓存复用: ${filePath}`)
+      return {
+        filePath: `file://${filePath}`,
+        shouldDelete: true
+      }
+    }
+
     const response = await this.downloadWithRetry(imageUrl)
+    const sourcePath = sharedCachePath ?? filePath
+    fs.writeFileSync(sourcePath, response.data)
 
-    // 保存到本地
-    fs.writeFileSync(filePath, response.data)
+    if (sharedCachePath) {
+      this.copySharedCacheToTarget(sharedCachePath, filePath)
+    }
 
     logger.debug(`图片已下载: ${filePath}`)
 
@@ -162,7 +195,10 @@ export class ImageDownloader {
    * @param retryCount - 当前重试次数
    * @returns Axios 响应
    */
-  private async downloadWithRetry(imageUrl: string, retryCount: number = 0): Promise<any> {
+  private async downloadWithRetry(
+    imageUrl: string,
+    retryCount: number = 0
+  ): Promise<any> {
     try {
       const response = await this.axiosInstance.get(imageUrl, {
         responseType: 'arraybuffer',
@@ -177,7 +213,10 @@ export class ImageDownloader {
     } catch (error) {
       if (retryCount < this.maxRetries) {
         const delay = this.retryDelay * Math.pow(2, retryCount) // 指数退避
-        logger.warn(`图片下载失败，${delay}ms 后进行第 ${retryCount + 1}/${this.maxRetries} 次重试: ${imageUrl.substring(0, 50)}...`, error)
+        logger.warn(
+          `图片下载失败，${delay}ms 后进行第 ${retryCount + 1}/${this.maxRetries} 次重试: ${imageUrl.substring(0, 50)}...`,
+          error
+        )
 
         // 等待后重试
         await this.sleep(delay)
@@ -195,8 +234,9 @@ export class ImageDownloader {
    * @param ms - 延迟毫秒数
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
+
 
   /**
    * 生成文件名
@@ -205,10 +245,14 @@ export class ImageDownloader {
    * @param index - 图片索引
    * @returns 文件名
    */
-  private generateFilename(imageUrl: string, title?: string, index?: number): string {
+  private generateFilename(
+    imageUrl: string,
+    title?: string,
+    index?: number
+  ): string {
     // 获取文件扩展名
     const ext = this.getExtension(imageUrl)
-
+    
     // 根据 removeCache 配置决定文件名
     if (Config.app.removeCache) {
       // 使用时间戳
@@ -233,7 +277,7 @@ export class ImageDownloader {
       const urlObj = new URL(url)
       const pathname = urlObj.pathname
       const ext = path.extname(pathname)
-
+      
       // 如果有扩展名且是常见图片格式，使用它
       if (ext && /^\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(ext)) {
         return ext
@@ -241,7 +285,7 @@ export class ImageDownloader {
     } catch {
       // URL 解析失败，继续使用默认扩展名
     }
-
+    
     // 默认使用 .jpg
     return '.jpg'
   }
@@ -253,14 +297,11 @@ export class ImageDownloader {
   private scheduleDelete(filePath: string): void {
     // 移除 file:// 协议前缀
     const actualPath = filePath.replace(/^file:\/\//, '')
-
+    
     // 10 分钟后删除文件
-    setTimeout(
-      () => {
-        this.deleteFile(actualPath)
-      },
-      10 * 60 * 1000
-    )
+    setTimeout(() => {
+      this.deleteFile(actualPath)
+    }, 10 * 60 * 1000)
   }
 
   /**
@@ -284,8 +325,39 @@ export class ImageDownloader {
    * @param title - 作品标题
    * @returns 处理后的图片路径数组
    */
-  async processImages(imageUrls: string[], title?: string): Promise<string[]> {
-    const results = await Promise.all(imageUrls.map((url, index) => this.processImage(url, title, index)))
+  async processImages(
+    imageUrls: string[],
+    title?: string,
+    cacheIdentityFactory?: (url: string, index: number) => CacheIdentity | undefined
+  ): Promise<string[]> {
+    const results = await Promise.all(
+      imageUrls.map((url, index) => this.processImage(url, title, index, cacheIdentityFactory?.(url, index)))
+    )
     return results
+  }
+
+  private resolveSharedCachePath(
+    imageUrl: string,
+    cacheIdentity?: CacheIdentity
+  ): string | null {
+    if (!cacheIdentity) return null
+    return path.join(
+      this.sharedCacheDir,
+      buildSharedCacheFilename(cacheIdentity.key, this.getExtension(imageUrl))
+    )
+  }
+
+  private copySharedCacheToTarget(sourcePath: string, targetPath: string): void {
+    if (sourcePath === targetPath) return
+
+    if (fs.existsSync(targetPath)) {
+      fs.unlinkSync(targetPath)
+    }
+
+    try {
+      fs.linkSync(sourcePath, targetPath)
+    } catch {
+      fs.copyFileSync(sourcePath, targetPath)
+    }
   }
 }

@@ -30,7 +30,12 @@
  */
 
 // 类型导出
-export type { ErrorContext, ErrorHandlerOptions, ErrorStrategy, RenderErrorOptions } from './types'
+export type {
+  ErrorContext,
+  ErrorHandlerOptions,
+  ErrorStrategy,
+  RenderErrorOptions
+} from './types'
 
 // 策略注册
 export { getStrategies, registerErrorStrategy } from './strategy'
@@ -39,10 +44,19 @@ export { getStrategies, registerErrorStrategy } from './strategy'
 export { renderErrorImage } from './render'
 
 // 发送
-export { sendErrorToAllMasters, sendErrorToMaster, sendErrorToTrigger } from './sender'
+export {
+  sendErrorToAllMasters,
+  sendErrorToMaster,
+  sendErrorToTrigger
+} from './sender'
 
 // 核心处理
 export { handleBusinessError, wrapWithErrorHandler } from './handler'
 
 // 工具函数
-export { getPushTaskBotId, isPushTask, parseLogsToStructured, statBotId } from './utils'
+export {
+  getPushTaskBotId,
+  isPushTask,
+  parseLogsToStructured,
+  statBotId
+} from './utils'

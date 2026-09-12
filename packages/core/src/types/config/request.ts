@@ -24,4 +24,7 @@ export type requestConfig = {
       password: string
     }
   }
+
+  /** axios 额外请求头，仅供内部请求复用 */
+  headers?: Record<string, string>
 }

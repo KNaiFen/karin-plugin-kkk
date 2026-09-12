@@ -1,4 +1,4 @@
-import type { ApiErrorData } from '@template/template/other/handlerError/components/types'
+import type { ApiErrorProps } from '@kkk/template-contracts'
 import type { Message } from 'node-karin'
 
 import type { getBuildMetadata } from '@/module'
@@ -16,13 +16,17 @@ export interface ErrorHandlerOptions {
    * @param error - 捕获的错误对象
    * @param logs - 结构化日志数组
    */
-  customErrorHandler?: (error: Error, logs: ApiErrorData['logs']) => Promise<void>
+  customErrorHandler?: (error: Error, logs: ApiErrorProps['data']['logs']) => Promise<void>
 }
 
 /**
  * 错误处理上下文
  */
 export interface ErrorContext {
+  /**
+   * 本次失败的诊断追踪编号
+   */
+  traceId: string
   /**
    * 捕获的错误对象
    */
@@ -34,7 +38,7 @@ export interface ErrorContext {
   /**
    * 结构化日志数组
    */
-  logs: ApiErrorData['logs']
+  logs: ApiErrorProps['data']['logs']
   /**
    * 消息事件对象
    */
@@ -46,7 +50,7 @@ export interface ErrorContext {
   /**
    * 适配器信息（可选）
    */
-  adapterInfo?: ApiErrorData['adapterInfo']
+  adapterInfo?: ApiErrorProps['data']['adapterInfo']
 }
 
 /**
@@ -94,7 +98,7 @@ export interface RenderErrorOptions {
   /**
    * 平台标识
    */
-  platform?: ApiErrorData['platform']
+  platform?: ApiErrorProps['data']['platform']
   /**
    * 自定义错误名称
    */
@@ -104,7 +108,7 @@ export interface RenderErrorOptions {
    */
   errorMessage?: string
   /**
-   * 自定义堆栈信息
+   * @deprecated 错误通知不再展示调用栈；保留该字段仅兼容旧调用方
    */
   stack?: string
   /**

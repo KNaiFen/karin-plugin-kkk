@@ -3,11 +3,19 @@
  * 负责B站弹幕数据转换、ASS 字幕生成、视频烧录等功能
  */
 import fs from 'node:fs'
-import os from 'node:os'
 
 import { ffmpeg, ffprobe, logger } from 'node-karin'
 
-import { Common } from '@/module/utils'
+import {
+  buildBitrateLimitArgs,
+  buildDerivedCacheIdentity,
+  type CacheIdentity,
+  Common,
+  resolveDerivedArtifact,
+  resolveFileCacheIdentity,
+  resolveVideoEncodeArgs,
+  type VideoEncodePreset
+} from '@/module/utils'
 
 // ==================== 类型定义 ====================
 
@@ -23,14 +31,6 @@ export interface BiliDanmakuElem {
   color: number
   /** 内容 */
   content: string
-}
-
-/** 热门弹幕项（相同内容的弹幕聚合） */
-export interface HotDanmakuItem {
-  /** 弹幕内容 */
-  content: string
-  /** 出现次数 */
-  count: number
 }
 
 /** B站横屏转竖屏模式 */
@@ -60,56 +60,14 @@ export interface BiliDanmakuOptions {
   videoCodec?: BiliVideoCodec
   /** 弹幕字号（默认 medium） */
   danmakuFontSize?: BiliDanmakuFontSize
-}
-
-// ==================== 编码器检测 ====================
-
-/** 各编码格式的硬件编码器优先级 */
-const ENCODER_PRIORITY: Record<BiliVideoCodec, readonly string[]> = {
-  h264: ['h264_nvenc', 'h264_qsv', 'h264_amf', 'libx264'],
-  h265: ['hevc_nvenc', 'hevc_qsv', 'hevc_amf', 'libx265'],
-  av1: ['av1_nvenc', 'av1_qsv', 'av1_amf', 'libsvtav1', 'libaom-av1']
-} as const
-
-/** 各编码格式的软件回退编码器 */
-const SOFTWARE_FALLBACK: Record<BiliVideoCodec, string> = {
-  h264: 'libx264',
-  h265: 'libx265',
-  av1: 'libsvtav1'
-}
-
-/** 缓存检测结果（按编码格式） */
-const cachedEncoders: Partial<Record<BiliVideoCodec, string>> = {}
-
-/** 检测可用的硬件编码器 */
-async function detectEncoder(codec: BiliVideoCodec): Promise<string> {
-  if (cachedEncoders[codec]) return cachedEncoders[codec]!
-
-  logger.debug(`[BiliDanmaku] 开始检测 ${codec.toUpperCase()} 编码器...`)
-
-  for (const encoder of ENCODER_PRIORITY[codec]) {
-    logger.debug(`[BiliDanmaku] 测试编码器: ${encoder}`)
-    try {
-      const result = await ffmpeg(`-f lavfi -i color=c=black:s=320x240:d=0.1 -c:v ${encoder} -f null -`)
-      logger.debug(`[BiliDanmaku] ${encoder} 测试结果: status=${result.status}`)
-      if (result.status) {
-        cachedEncoders[codec] = encoder
-        logger.info(`[BiliDanmaku] 使用 ${codec.toUpperCase()} 编码器: ${encoder}`)
-        return encoder
-      }
-    } catch (e) {
-      logger.debug(`[BiliDanmaku] 编码器 ${encoder} 测试异常: ${e}`)
-    }
-  }
-
-  const fallback = SOFTWARE_FALLBACK[codec]
-  cachedEncoders[codec] = fallback
-  logger.info(`[BiliDanmaku] 回退到软件编码器: ${fallback}`)
-  return fallback
+  /** 视频编码预设 */
+  encodePreset?: VideoEncodePreset | string
+  /** 自定义视频编码参数 */
+  customEncodeArgs?: string
 }
 
 /** 获取视频码率（kbps） */
-async function getVideoBitrate(path: string): Promise<number> {
+async function getVideoBitrate (path: string): Promise<number> {
   try {
     const fileSize = fs.statSync(path).size
     const { stdout } = await ffprobe(`-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${path}"`)
@@ -124,70 +82,38 @@ async function getVideoBitrate(path: string): Promise<number> {
   }
 
   try {
-    const { stdout } = await ffprobe(
-      `-v error -select_streams v:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 "${path}"`
-    )
+    const { stdout } = await ffprobe(`-v error -select_streams v:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 "${path}"`)
     const bitrate = parseInt(stdout.trim())
     if (bitrate > 0) return Math.round(bitrate / 1000)
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
 
   try {
     const { stdout } = await ffprobe(`-v error -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "${path}"`)
     const bitrate = parseInt(stdout.trim())
     if (bitrate > 0) return Math.round(bitrate / 1000)
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
 
   logger.warn('[BiliDanmaku] 无法获取视频码率，将使用 CRF 模式')
   return 0
 }
 
 /** 获取编码器参数 */
-function getEncoderParams(encoder: string, targetBitrate?: number): string {
-  const threads = Math.max(1, Math.floor(os.cpus().length / 2))
+async function getEncoderParams (
+  codec: BiliVideoCodec,
+  targetBitrate: number | undefined,
+  options: BiliDanmakuOptions
+): Promise<string> {
+  const encodeArgs = await resolveVideoEncodeArgs({
+    preset: options.encodePreset,
+    customArgs: options.customEncodeArgs,
+    codec
+  })
 
   if (targetBitrate && targetBitrate > 0) {
-    const bitrateK = `${targetBitrate}k`
-    const maxrate = `${Math.round(targetBitrate * 2)}k`
-    const bufsize = `${Math.round(targetBitrate * 4)}k`
-
-    if (encoder === 'h264_nvenc') return `-c:v h264_nvenc -preset p4 -rc vbr -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize}`
-    if (encoder === 'h264_qsv') return `-c:v h264_qsv -preset medium -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize}`
-    if (encoder === 'h264_amf') return `-c:v h264_amf -quality balanced -rc vbr_peak -b:v ${bitrateK} -maxrate ${maxrate}`
-    if (encoder === 'libx264')
-      return `-c:v libx264 -preset medium -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize} -threads ${threads}`
-    if (encoder === 'hevc_nvenc') return `-c:v hevc_nvenc -preset p4 -rc vbr -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize}`
-    if (encoder === 'hevc_qsv') return `-c:v hevc_qsv -preset medium -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize}`
-    if (encoder === 'hevc_amf') return `-c:v hevc_amf -quality balanced -rc vbr_peak -b:v ${bitrateK} -maxrate ${maxrate}`
-    if (encoder === 'libx265')
-      return `-c:v libx265 -preset medium -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize} -threads ${threads}`
-    if (encoder === 'av1_nvenc') return `-c:v av1_nvenc -preset p4 -rc vbr -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize}`
-    if (encoder === 'av1_qsv') return `-c:v av1_qsv -preset medium -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize}`
-    if (encoder === 'av1_amf') return `-c:v av1_amf -quality balanced -rc vbr_peak -b:v ${bitrateK} -maxrate ${maxrate}`
-    if (encoder === 'libsvtav1')
-      return `-c:v libsvtav1 -preset 6 -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize} -threads ${threads}`
-    if (encoder === 'libaom-av1')
-      return `-c:v libaom-av1 -cpu-used 4 -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize} -threads ${threads}`
-    return `-c:v libx265 -preset medium -b:v ${bitrateK} -maxrate ${maxrate} -bufsize ${bufsize} -threads ${threads}`
+    return `${buildBitrateLimitArgs(targetBitrate, targetBitrate * 2, targetBitrate * 4)} ${encodeArgs}`
   }
 
-  if (encoder === 'h264_nvenc') return '-c:v h264_nvenc -preset p4 -rc vbr -cq 23'
-  if (encoder === 'h264_qsv') return '-c:v h264_qsv -preset medium -global_quality 23'
-  if (encoder === 'h264_amf') return '-c:v h264_amf -quality balanced -rc cqp -qp_i 23 -qp_p 23'
-  if (encoder === 'libx264') return `-c:v libx264 -crf 23 -preset medium -threads ${threads}`
-  if (encoder === 'hevc_nvenc') return '-c:v hevc_nvenc -preset p4 -rc vbr -cq 28'
-  if (encoder === 'hevc_qsv') return '-c:v hevc_qsv -preset medium -global_quality 28'
-  if (encoder === 'hevc_amf') return '-c:v hevc_amf -quality balanced -rc cqp -qp_i 28 -qp_p 28'
-  if (encoder === 'libx265') return `-c:v libx265 -crf 28 -preset medium -threads ${threads}`
-  if (encoder === 'av1_nvenc') return '-c:v av1_nvenc -preset p4 -rc vbr -cq 30'
-  if (encoder === 'av1_qsv') return '-c:v av1_qsv -preset medium -global_quality 30'
-  if (encoder === 'av1_amf') return '-c:v av1_amf -quality balanced -rc cqp -qp_i 30 -qp_p 30'
-  if (encoder === 'libsvtav1') return `-c:v libsvtav1 -crf 30 -preset 6 -threads ${threads}`
-  if (encoder === 'libaom-av1') return `-c:v libaom-av1 -crf 30 -cpu-used 4 -threads ${threads}`
-  return `-c:v libx265 -crf 28 -preset medium -threads ${threads}`
+  return encodeArgs
 }
 
 // ==================== 内部工具函数 ====================
@@ -216,43 +142,37 @@ const estimateWidth = (text: string, fontSize: number): number => {
   return w
 }
 
-const escapeASS = (text: string): string => text.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\n/g, '\\N')
+const escapeASS = (text: string): string =>
+  text.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}').replace(/\n/g, '\\N')
 
-const escapeWinPath = (path: string): string => path.replace(/\\/g, '/').replace(/:/g, '\\:')
+const escapeWinPath = (path: string): string =>
+  path.replace(/\\/g, '/').replace(/:/g, '\\:')
 
 const isLandscape = (w: number, h: number) => w > h
 
 // ==================== FFprobe 工具 ====================
 
-export async function getBiliResolution(path: string): Promise<{ width: number; height: number }> {
+export async function getBiliResolution (path: string): Promise<{ width: number; height: number }> {
   try {
     const { stdout } = await ffprobe(`-v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "${path}"`)
     const [w, h] = stdout.trim().split('x').map(Number)
     if (w && h) return { width: w, height: h }
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
   try {
     const result = await ffmpeg(`-i "${path}" -f null -`, { timeout: 5000 })
     const stderr = result.stderr || ''
     const match = stderr.match(/(\d{3,4})x(\d{3,4})/)
     if (match) return { width: parseInt(match[1]), height: parseInt(match[2]) }
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
   return { width: 1920, height: 1080 }
 }
 
-export async function getBiliFrameRate(path: string): Promise<number> {
+export async function getBiliFrameRate (path: string): Promise<number> {
   try {
-    const { stdout } = await ffprobe(
-      `-v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "${path}"`
-    )
+    const { stdout } = await ffprobe(`-v error -select_streams v:0 -show_entries stream=r_frame_rate -of default=noprint_wrappers=1:nokey=1 "${path}"`)
     const [num, den] = stdout.trim().split('/').map(Number)
     if (den > 0) return num / den
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
   try {
     const result = await ffmpeg(`-i "${path}" -f null -`, { timeout: 5000 })
     const stderr = result.stderr || ''
@@ -260,40 +180,10 @@ export async function getBiliFrameRate(path: string): Promise<number> {
     if (fpsMatch) return parseFloat(fpsMatch[1])
     const fracMatch = stderr.match(/(\d+)\/(\d+)\s*fps/)
     if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2])
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
   return 30
 }
 
-// ==================== 热门弹幕统计 ====================
-
-/**
- * 统计用于视频信息封面展示的弹幕（相同内容聚合）
- * @param danmakuList 弹幕列表
- * @param topN 返回的条数，默认 5
- * @returns 重复弹幕优先，不足时用真实弹幕按出现顺序补齐
- */
-export function getHotDanmaku(danmakuList: BiliDanmakuElem[], topN = 5): HotDanmakuItem[] {
-  const counter = new Map<string, number>()
-  const firstSeen = new Map<string, number>()
-  const sortedDanmaku = [...danmakuList].sort((a, b) => a.progress - b.progress)
-
-  for (const dm of sortedDanmaku) {
-    const content = dm.content?.trim()
-    if (!content) continue
-    if (!firstSeen.has(content)) firstSeen.set(content, dm.progress)
-    counter.set(content, (counter.get(content) ?? 0) + 1)
-  }
-
-  return [...counter.entries()]
-    .map(([content, count]) => ({ content, count }))
-    .sort((a, b) => {
-      if (b.count !== a.count) return b.count - a.count
-      return (firstSeen.get(a.content) ?? 0) - (firstSeen.get(b.content) ?? 0)
-    })
-    .slice(0, topN)
-}
 
 // ==================== ASS 生成 ====================
 
@@ -313,8 +203,19 @@ const FONT_SIZE_MAP: Record<BiliDanmakuFontSize, { base: number; trackH: number 
 /**
  * 生成B站弹幕 ASS 字幕内容
  */
-export function generateBiliASS(danmakuList: BiliDanmakuElem[], width: number, height: number, options: BiliDanmakuOptions = {}): string {
-  const { scrollTime = 8, danmakuOpacity = 70, fontName = 'Microsoft YaHei', danmakuArea = 0.5, danmakuFontSize = 'medium' } = options
+export function generateBiliASS (
+  danmakuList: BiliDanmakuElem[],
+  width: number,
+  height: number,
+  options: BiliDanmakuOptions = {}
+): string {
+  const {
+    scrollTime = 8,
+    danmakuOpacity = 70,
+    fontName = 'Microsoft YaHei',
+    danmakuArea = 0.5,
+    danmakuFontSize = 'medium'
+  } = options
 
   const fontScale = height / 1080
   const sizeConfig = FONT_SIZE_MAP[danmakuFontSize]
@@ -328,10 +229,7 @@ export function generateBiliASS(danmakuList: BiliDanmakuElem[], width: number, h
   const fixedTrackCount = trackCount
   const minGap = Math.round(10 * fontScale)
   // 将 0-100 的透明度转换为 ASS 的 alpha 值（0-255，0为不透明，255为完全透明）
-  const alpha = Math.round((100 - Math.max(0, Math.min(100, danmakuOpacity))) * 2.55)
-    .toString(16)
-    .padStart(2, '0')
-    .toUpperCase()
+  const alpha = Math.round((100 - Math.max(0, Math.min(100, danmakuOpacity))) * 2.55).toString(16).padStart(2, '0').toUpperCase()
 
   let ass = `[Script Info]
 Title: Bilibili Danmaku
@@ -386,7 +284,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     if (dm.mode === 4) {
       const duration = 4000
       const endTime = startTime + duration
-      let idx = bottomTracks.findIndex((t) => t <= startTime)
+      let idx = bottomTracks.findIndex(t => t <= startTime)
       if (idx === -1) idx = Math.floor(Math.random() * bottomTracks.length)
       bottomTracks[idx] = endTime
       const y = height - bottomMargin - idx * trackH
@@ -394,7 +292,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     } else if (dm.mode === 5) {
       const duration = 4000
       const endTime = startTime + duration
-      let idx = topTracks.findIndex((t) => t <= startTime)
+      let idx = topTracks.findIndex(t => t <= startTime)
       if (idx === -1) idx = Math.floor(Math.random() * topTracks.length)
       topTracks[idx] = endTime
       const y = topMargin + idx * trackH + fontSize
@@ -455,7 +353,7 @@ interface CanvasInfo {
 
 const MAX_OUTPUT_WIDTH = 2160
 
-function calcCanvas(origW: number, origH: number, verticalMode: BiliVerticalMode): CanvasInfo {
+function calcCanvas (origW: number, origH: number, verticalMode: BiliVerticalMode): CanvasInfo {
   if (verticalMode === 'off') {
     return { width: origW, height: origH, offsetY: 0, isVertical: false }
   }
@@ -494,7 +392,7 @@ function calcCanvas(origW: number, origH: number, verticalMode: BiliVerticalMode
   return { width: origW, height: origH, offsetY: 0, isVertical: false }
 }
 
-function buildFilter(canvas: CanvasInfo, assPath: string): string {
+function buildFilter (canvas: CanvasInfo, assPath: string): string {
   const escaped = escapeWinPath(assPath)
   if (canvas.isVertical) {
     if (canvas.scale && canvas.scale !== 1 && canvas.scale < 1) {
@@ -508,54 +406,72 @@ function buildFilter(canvas: CanvasInfo, assPath: string): string {
 /**
  * 烧录B站弹幕到视频
  */
-export async function burnBiliDanmaku(
+export async function burnBiliDanmaku (
   videoPath: string,
   danmakuList: BiliDanmakuElem[],
   outputPath: string,
-  options: BiliDanmakuOptions = {}
+  options: BiliDanmakuOptions = {},
+  cacheIdentity?: CacheIdentity
 ): Promise<boolean> {
   const { removeSource = false, verticalMode = 'off', videoCodec = 'h265' } = options
+  const derivedCacheIdentity = cacheIdentity ?? buildDerivedCacheIdentity(
+    'burn-bilibili-danmaku',
+    [
+      resolveFileCacheIdentity(videoPath)
+    ],
+    {
+      danmakuList,
+      options
+    }
+  )
+  const result = await resolveDerivedArtifact(derivedCacheIdentity, outputPath, async (cacheOutputPath) => {
+    const resolution = await getBiliResolution(videoPath)
+    const frameRate = await getBiliFrameRate(videoPath)
+    const sourceBitrate = await getVideoBitrate(videoPath)
+    const canvas = calcCanvas(resolution.width, resolution.height, verticalMode)
 
-  const resolution = await getBiliResolution(videoPath)
-  const frameRate = await getBiliFrameRate(videoPath)
-  const sourceBitrate = await getVideoBitrate(videoPath)
-  const canvas = calcCanvas(resolution.width, resolution.height, verticalMode)
+    if (canvas.isVertical) {
+      logger.debug(`[BiliDanmaku] 竖屏模式: ${resolution.width}x${resolution.height} -> ${canvas.width}x${canvas.height}`)
+    }
 
-  if (canvas.isVertical) {
-    logger.debug(`[BiliDanmaku] 竖屏模式: ${resolution.width}x${resolution.height} -> ${canvas.width}x${canvas.height}`)
-  }
+    const assContent = generateBiliASS(danmakuList, canvas.width, canvas.height, options)
+    const assPath = videoPath.replace(/\.[^.]+$/, '_danmaku.ass')
+    fs.writeFileSync(assPath, assContent, 'utf-8')
+    logger.debug(`[BiliDanmaku] 弹幕字幕已生成: ${assPath}`)
 
-  const assContent = generateBiliASS(danmakuList, canvas.width, canvas.height, options)
-  const assPath = videoPath.replace(/\.[^.]+$/, '_danmaku.ass')
-  fs.writeFileSync(assPath, assContent, 'utf-8')
-  logger.debug(`[BiliDanmaku] 弹幕字幕已生成: ${assPath}`)
+    const filter = buildFilter(canvas, assPath)
+    const encoderParams = await getEncoderParams(videoCodec, sourceBitrate, options)
+    const ffmpegResult = await ffmpeg(
+      `-y -i "${videoPath}" -vf "${filter}" -r ${frameRate} ${encoderParams} -c:a copy "${cacheOutputPath}"`
+    )
 
-  const filter = buildFilter(canvas, assPath)
-  const encoder = await detectEncoder(videoCodec)
-  const encoderParams = getEncoderParams(encoder, sourceBitrate)
-  const result = await ffmpeg(`-y -i "${videoPath}" -vf "${filter}" -r ${frameRate} ${encoderParams} -c:a copy "${outputPath}"`)
+    Common.removeFile(assPath, true)
 
-  Common.removeFile(assPath, true)
+    if (ffmpegResult.status) {
+      logger.mark(`[BiliDanmaku] 弹幕烧录成功: ${cacheOutputPath}`)
+      if (removeSource) Common.removeFile(videoPath)
+    } else {
+      logger.error('[BiliDanmaku] 弹幕烧录失败', ffmpegResult)
+    }
 
-  if (result.status) {
-    logger.mark(`[BiliDanmaku] 弹幕烧录成功: ${outputPath}`)
-    if (removeSource) Common.removeFile(videoPath)
-  } else {
-    logger.error('[BiliDanmaku] 弹幕烧录失败', result)
-  }
+    return {
+      success: ffmpegResult.status
+    }
+  })
 
-  return result.status
+  return result.success
 }
 
 /**
  * 合并视频音频并烧录B站弹幕
  */
-export async function mergeAndBurnBili(
+export async function mergeAndBurnBili (
   videoPath: string,
   audioPath: string,
   danmakuList: BiliDanmakuElem[],
   outputPath: string,
-  options: BiliDanmakuOptions = {}
+  options: BiliDanmakuOptions = {},
+  cacheIdentity?: CacheIdentity
 ): Promise<boolean> {
   const { removeSource = false, verticalMode = 'off', videoCodec = 'h265' } = options
 
@@ -568,39 +484,55 @@ export async function mergeAndBurnBili(
     return false
   }
 
-  const resolution = await getBiliResolution(videoPath)
-  const frameRate = await getBiliFrameRate(videoPath)
-  const sourceBitrate = await getVideoBitrate(videoPath)
-  const canvas = calcCanvas(resolution.width, resolution.height, verticalMode)
-
-  if (canvas.isVertical) {
-    logger.debug(`[BiliDanmaku] 竖屏模式: ${resolution.width}x${resolution.height} -> ${canvas.width}x${canvas.height}`)
-  }
-  logger.debug(`[BiliDanmaku] 分辨率: ${canvas.width}x${canvas.height}, 帧率: ${frameRate}fps, 码率: ${sourceBitrate}kbps`)
-
-  const assContent = generateBiliASS(danmakuList, canvas.width, canvas.height, options)
-  const assPath = videoPath.replace(/\.[^.]+$/, '_danmaku.ass')
-  fs.writeFileSync(assPath, assContent, 'utf-8')
-  logger.debug(`[BiliDanmaku] 弹幕字幕已生成: ${assPath}，共 ${danmakuList.length} 条`)
-
-  const filter = buildFilter(canvas, assPath)
-  const encoder = await detectEncoder(videoCodec)
-  const encoderParams = getEncoderParams(encoder, sourceBitrate)
-  const result = await ffmpeg(
-    `-y -i "${videoPath}" -i "${audioPath}" -f mp4 -vf "${filter}" -r ${frameRate} ${encoderParams} -c:a aac -b:a 192k "${outputPath}"`
-  )
-
-  Common.removeFile(assPath, true)
-
-  if (result.status) {
-    logger.mark(`[BiliDanmaku] 视频合成+弹幕烧录成功: ${outputPath}`)
-    if (removeSource) {
-      Common.removeFile(videoPath)
-      Common.removeFile(audioPath)
+  const derivedCacheIdentity = cacheIdentity ?? buildDerivedCacheIdentity(
+    'merge-burn-bilibili-danmaku',
+    [
+      resolveFileCacheIdentity(videoPath),
+      resolveFileCacheIdentity(audioPath)
+    ],
+    {
+      danmakuList,
+      options
     }
-  } else {
-    logger.error('[BiliDanmaku] 视频合成+弹幕烧录失败', result)
-  }
+  )
+  const result = await resolveDerivedArtifact(derivedCacheIdentity, outputPath, async (cacheOutputPath) => {
+    const resolution = await getBiliResolution(videoPath)
+    const frameRate = await getBiliFrameRate(videoPath)
+    const sourceBitrate = await getVideoBitrate(videoPath)
+    const canvas = calcCanvas(resolution.width, resolution.height, verticalMode)
 
-  return result.status
+    if (canvas.isVertical) {
+      logger.debug(`[BiliDanmaku] 竖屏模式: ${resolution.width}x${resolution.height} -> ${canvas.width}x${canvas.height}`)
+    }
+    logger.debug(`[BiliDanmaku] 分辨率: ${canvas.width}x${canvas.height}, 帧率: ${frameRate}fps, 码率: ${sourceBitrate}kbps`)
+
+    const assContent = generateBiliASS(danmakuList, canvas.width, canvas.height, options)
+    const assPath = videoPath.replace(/\.[^.]+$/, '_danmaku.ass')
+    fs.writeFileSync(assPath, assContent, 'utf-8')
+    logger.debug(`[BiliDanmaku] 弹幕字幕已生成: ${assPath}，共 ${danmakuList.length} 条`)
+
+    const filter = buildFilter(canvas, assPath)
+    const encoderParams = await getEncoderParams(videoCodec, sourceBitrate, options)
+    const ffmpegResult = await ffmpeg(
+      `-y -i "${videoPath}" -i "${audioPath}" -f mp4 -vf "${filter}" -r ${frameRate} ${encoderParams} -c:a aac -b:a 192k "${cacheOutputPath}"`
+    )
+
+    Common.removeFile(assPath, true)
+
+    if (ffmpegResult.status) {
+      logger.mark(`[BiliDanmaku] 视频合成+弹幕烧录成功: ${cacheOutputPath}`)
+      if (removeSource) {
+        Common.removeFile(videoPath)
+        Common.removeFile(audioPath)
+      }
+    } else {
+      logger.error('[BiliDanmaku] 视频合成+弹幕烧录失败', ffmpegResult)
+    }
+
+    return {
+      success: ffmpegResult.status
+    }
+  })
+
+  return result.success
 }

@@ -8,4 +8,14 @@ export interface cookiesConfig {
   kuaishou: string
   /** 小红书ck */
   xiaohongshu: string
+  /** TikTok ck */
+  tiktok: string
+  /** 小黑盒 ck */
+  heybox: string
+  /** 知乎 ck */
+  zhihu: string
+  /** 贴吧 ck */
+  tieba: string
+  /** 微博 ck */
+  weibo: string
 }

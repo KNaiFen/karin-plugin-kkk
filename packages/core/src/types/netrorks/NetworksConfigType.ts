@@ -1,6 +1,7 @@
-import { ResponseType } from 'node-karin/axios'
+import { AxiosRequestConfig, ResponseType } from 'node-karin/axios'
 
 import { downLoadFileOptions } from '@/module'
+import type { OutboundRequestProfile } from '@/module/utils/OutboundRequest'
 
 /**
  * 限速配置
@@ -58,4 +59,12 @@ export interface NetworksConfigType {
    * 当下载速度过快导致连接被重置时，会自动降速重试
    */
   throttle?: ThrottleConfig
+  /** 额外 axios 网络选项，例如代理 agent */
+  networkOptions?: Pick<AxiosRequestConfig, 'httpAgent' | 'httpsAgent' | 'proxy'>
+
+  /** 出站安全策略 */
+  outboundProfile?: OutboundRequestProfile
+
+  /** 缓冲型响应大小上限 */
+  maxContentLength?: number
 }

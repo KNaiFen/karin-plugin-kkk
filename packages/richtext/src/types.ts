@@ -3,7 +3,9 @@
  *
  * 后端只需要生产这些纯 JSON 节点，前端可以再按 React、HTML、Canvas 等不同目标渲染。
  */
-export type RichTextNode = RichTextInlineNode | RichTextBlockNode
+export type RichTextNode =
+  | RichTextInlineNode
+  | RichTextBlockNode
 
 /** 行内节点。 */
 export type RichTextInlineNode =
@@ -16,10 +18,8 @@ export type RichTextInlineNode =
   | RichTextAtNode
   | RichTextLotteryNode
   | RichTextWebLinkNode
-  | RichTextOpusLinkNode
   | RichTextVoteNode
   | RichTextViewPictureNode
-  | RichTextHashtagNode
 
 /** 块级节点。 */
 export type RichTextBlockNode =
@@ -140,20 +140,6 @@ export interface RichTextWebLinkNode {
   jumpUrl: string
 }
 
-/**
- * 站内图文链接节点。带SVG图标，显示图文标题。
- *
- * 对应 B站 opus 正文里的高亮链接（官方页面上的 `opus-text-rich-hl`）。
- * 模板渲染不需要交互，所以只渲染图标和文本；`url` 留给纯文本场景（如合并转发）拼出链接。
- */
-export interface RichTextOpusLinkNode {
-  type: 'opusLink'
-  /** 显示文本（如图文标题） */
-  text: string
-  /** 跳转链接 */
-  url: string
-}
-
 /** 投票节点。带SVG图标，显示投票标题。 */
 export interface RichTextVoteNode {
   type: 'vote'
@@ -165,18 +151,6 @@ export interface RichTextVoteNode {
 export interface RichTextViewPictureNode {
   type: 'viewPicture'
   /** 显示文本 */
-  text: string
-}
-
-/**
- * Hashtag 话题节点。
- *
- * 纯文本高亮，不带任何图标。用于抖音等平台的 #话题# 标签展示。
- * 与 topic 节点的区别：topic 带有 B站风格的 # 图标，hashtag 只做纯文字高亮。
- */
-export interface RichTextHashtagNode {
-  type: 'hashtag'
-  /** 话题文本（包含 # 号） */
   text: string
 }
 
@@ -303,8 +277,6 @@ export interface RichTextRenderOptions {
   lottery?: RichTextNodeStyleConfig
   /** 网页链接节点 */
   webLink?: RichTextNodeStyleConfig
-  /** 站内图文链接节点 */
-  opusLink?: RichTextNodeStyleConfig
   /** 投票节点 */
   vote?: RichTextNodeStyleConfig
   /** 查看图片节点 */
@@ -313,8 +285,6 @@ export interface RichTextRenderOptions {
   codeBlock?: RichTextNodeStyleConfig
   /** 链接卡片节点 */
   linkCard?: RichTextNodeStyleConfig
-  /** hashtag 话题节点 */
-  hashtag?: RichTextNodeStyleConfig
   /** 图标缩放比例，默认 1。用于在不同字体大小下保持图标比例一致。 */
   iconScale?: number
 }

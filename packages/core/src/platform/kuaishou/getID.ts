@@ -4,7 +4,7 @@ import { Networks } from '@/module'
 import type { KuaishouDataTypes } from '@/types'
 
 export interface ExtendedKuaishouOptionsType {
-  type: KuaishouDataTypes[keyof KuaishouDataTypes]
+  type: KuaishouDataTypes[keyof KuaishouDataTypes],
   [x: string]: any
 }
 
@@ -15,7 +15,17 @@ export interface ExtendedKuaishouOptionsType {
  * @returns
  */
 export const getKuaishouID = async (url: string, log = true) => {
-  const longLink = await new Networks({ url }).getLongLink()
+  const directUrl = (() => {
+    try {
+      return decodeURIComponent(url)
+    } catch {
+      return url
+    }
+  })()
+  const shouldResolveRedirect = !/kuaishou\.com\/short-video\/[^/?#]+/i.test(directUrl) && !/photoId=[^&#]+/i.test(directUrl)
+  const longLink = shouldResolveRedirect
+    ? await new Networks({ url, outboundProfile: 'kuaishou-redirect' }).getLongLink()
+    : directUrl
   let result = {} as ExtendedKuaishouOptionsType
   switch (true) {
     case /photoId=(.*)/.test(longLink): {
@@ -41,8 +51,6 @@ export const getKuaishouID = async (url: string, log = true) => {
     }
   }
 
-  if (log) {
-    console.log(result)
-  }
+  log && console.log(result)
   return result
 }

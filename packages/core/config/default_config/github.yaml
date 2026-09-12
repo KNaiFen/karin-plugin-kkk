@@ -1,0 +1,36 @@
+# GitHub 仓库解析开关，单独开关，受「总开关」影响
+switch: true
+
+# 解析时发送的内容，可选值：info(仓库信息)、image(预览图片)
+sendContent:
+  - info
+  - image
+
+# 外链内容渲染图设置
+renderCard:
+  # 是否启用渲染图发送
+  enable: true
+  # 渲染图发送成功后，是否把解析出来的原图并入同一个图片合集
+  includeImages: false
+
+# 纯链接补发标题设置
+plainTitleReply:
+  # 消息内容只有 GitHub 仓库链接时，解析成功后额外发送「【GitHub】owner/repo」
+  switch: true
+  # 哪些内容类型触发补发标题，可选：text、image
+  types:
+    - text
+    - image
+
+# GitHub Personal Access Token（可选）
+token: ''
+
+# GitHub 专用代理配置（可选）
+proxy:
+  switch: false
+  host: ''
+  port: 0
+  protocol: http
+  auth:
+    username: ''
+    password: ''

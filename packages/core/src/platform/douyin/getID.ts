@@ -3,6 +3,9 @@ import axios from 'node-karin/axios'
 
 import type { DouyinDataTypes } from '@/types'
 
+import { Config } from '../../module/utils/Config'
+import { recordFailureTraceStep } from '../../module/utils/ErrorTrace'
+import { buildConfiguredRequestOptions } from '../../module/utils/RequestConfig'
 import { DouyinWorkMainType } from './workType'
 
 export interface DouyinIdData {
@@ -11,25 +14,24 @@ export interface DouyinIdData {
   is_mp4?: boolean
   /** 作品主类型 */
   work_type?: DouyinWorkMainType
+  /** 短链解析后的最终落地地址 */
+  resolvedUrl?: string
+  /** HTML 主链使用的作品类型提示 */
+  typeHint?: 'video' | 'article' | 'note' | 'slides'
+  /** 这次短链重定向链路上拿到的临时 Cookie */
+  transientCookieHeader?: string
   [key: string]: any
 }
 
-/**
- * 获取抖音作品ID
- * @param event 消息事件
- * @param url 分享链接
- * @param log 输出日志，默认true
- * @returns
- */
-export const getDouyinID = async (event: Message, url: string, log = true): Promise<DouyinIdData> => {
-  const resp = await axios.get(url, {
-    headers: {
-      'User-Agent': 'Apifox/1.0.0 (https://apifox.com)'
-    },
-    maxRedirects: 10 // 确保跟随所有重定向
-  })
-  // 使用 responseUrl 或 request.res.responseUrl 获取最终 URL
-  const longLink = resp.request?.res?.responseUrl || resp.request?.responseURL || url
+export const extractDouyinLiveRoomId = (longLink: string): string | undefined => {
+  try {
+    return new URL(longLink).pathname.split('/').filter(Boolean).pop()
+  } catch {
+    return longLink.split('?')[0].split('/').filter(Boolean).pop()
+  }
+}
+
+export const parseDouyinLongLink = (longLink: string): DouyinIdData => {
   let result = {} as DouyinIdData
   switch (true) {
     case longLink.includes('webcast.amemv.com'):
@@ -38,12 +40,14 @@ export const getDouyinID = async (event: Message, url: string, log = true): Prom
         const sec_uid = /sec_user_id=([^&]+)/.exec(longLink)
         result = {
           type: 'live_room_detail',
-          sec_uid: sec_uid ? sec_uid[1] : undefined
+          room_id: extractDouyinLiveRoomId(longLink),
+          sec_uid: sec_uid ? decodeURIComponent(sec_uid[1]) : undefined,
+          source: 'webcast_reflow'
         }
       } else if (longLink.includes('live.douyin.com')) {
         result = {
           type: 'live_room_detail',
-          room_id: longLink.split('/').pop()
+          room_id: extractDouyinLiveRoomId(longLink)
         }
       }
       break
@@ -52,14 +56,10 @@ export const getDouyinID = async (event: Message, url: string, log = true): Prom
     case /video\/(\d+)/.test(longLink):
     case /article\/(\d+)/.test(longLink):
     case /note\/(\d+)/.test(longLink): {
-      // 统一处理 video/article/note 类型，不在这里判断具体类型
-      // 因为抖音会先重定向到 /video/ 再通过 JS 跳转到 /article/
-      // 具体类型由后续 API 返回的 aweme_type 字段决定
       const match = /(?:video|article|note)\/(\d+)/.exec(longLink)
       result = {
         type: 'one_work',
         aweme_id: match ? match[1] : undefined
-        // 暂不设置 is_mp4 和 work_type，由后续 API 数据决定
       }
       break
     }
@@ -90,12 +90,145 @@ export const getDouyinID = async (event: Message, url: string, log = true): Prom
       break
     }
     default:
-      logger.warn('无法获取作品ID')
       break
   }
 
-  if (log) {
-    console.log(result)
+  return result
+}
+
+const shouldResolveDouyinRedirect = (url: string): boolean => {
+  try {
+    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`)
+    const hostname = parsed.hostname.toLowerCase()
+    return hostname === 'v.douyin.com' ||
+      hostname === 'jx.douyin.com' ||
+      hostname === 'jingxuan.douyin.com'
+  } catch {
+    return true
   }
+}
+
+const isDouyinRedirectStatus = (status?: number): boolean => {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
+}
+
+const normalizeSetCookieHeaders = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map(item => String(item)).filter(Boolean)
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return [value]
+  }
+  return []
+}
+
+const appendSetCookiePairs = (
+  cookieMap: Map<string, string>,
+  setCookieHeaders: string[]
+) => {
+  for (const header of setCookieHeaders) {
+    const firstPair = header.split(';')[0]?.trim()
+    if (!firstPair) continue
+
+    const index = firstPair.indexOf('=')
+    if (index <= 0) continue
+
+    const name = firstPair.slice(0, index).trim()
+    const value = firstPair.slice(index + 1).trim()
+    if (!name || !value) continue
+
+    cookieMap.set(name, `${name}=${value}`)
+  }
+}
+
+const buildTransientCookieHeader = (cookieMap: Map<string, string>): string | undefined => {
+  const values = Array.from(cookieMap.values()).filter(Boolean)
+  return values.length > 0 ? values.join('; ') : undefined
+}
+
+const getDouyinTypeHintFromLink = (url: string): DouyinIdData['typeHint'] => {
+  if (/\/(?:share\/)?article\/\d+/i.test(url)) return 'article'
+  if (/\/(?:share\/)?note\/\d+/i.test(url)) return 'note'
+  if (/\/(?:share\/)?slides\/\d+/i.test(url)) return 'slides'
+  if (/\/(?:share\/)?video\/\d+/i.test(url)) return 'video'
+  return undefined
+}
+
+const resolveDouyinShortRedirect = async (url: string): Promise<{ finalUrl: string, transientCookieHeader?: string }> => {
+  let currentUrl = url
+  const cookieMap = new Map<string, string>()
+
+  for (let hop = 0; hop < 10; hop++) {
+    const response = await axios.get(currentUrl, {
+      ...buildConfiguredRequestOptions(Config.request, {
+        maxRedirects: 0,
+        maxContentLength: 512 * 1024
+      }),
+      validateStatus: (status: number) => status >= 200 && status < 400
+    })
+
+    appendSetCookiePairs(cookieMap, normalizeSetCookieHeaders(response.headers?.['set-cookie']))
+
+    if (isDouyinRedirectStatus(response.status) && response.headers?.location) {
+      currentUrl = new URL(String(response.headers.location), currentUrl).toString()
+      continue
+    }
+
+    return {
+      finalUrl: response.request?.res?.responseUrl || response.request?.responseURL || currentUrl,
+      transientCookieHeader: buildTransientCookieHeader(cookieMap)
+    }
+  }
+
+  return {
+    finalUrl: currentUrl,
+    transientCookieHeader: buildTransientCookieHeader(cookieMap)
+  }
+}
+
+/**
+ * 获取抖音作品ID
+ * @param event 消息事件
+ * @param url 分享链接
+ * @param log 输出日志，默认true
+ */
+export const getDouyinID = async (event: Message, url: string, log = true): Promise<DouyinIdData> => {
+  const shouldResolveRedirect = shouldResolveDouyinRedirect(url)
+  recordFailureTraceStep('douyin.id.resolve.start', {
+    url,
+    shouldResolveRedirect
+  })
+
+  if (!shouldResolveRedirect) {
+    const directResult = parseDouyinLongLink(url)
+    if (directResult.type) {
+      if (directResult.type === 'one_work') {
+        directResult.resolvedUrl = url
+        directResult.typeHint = getDouyinTypeHintFromLink(url)
+      }
+      recordFailureTraceStep('douyin.id.resolve.direct', directResult)
+      log && logger.debug('[Douyin] 链接解析结果:', directResult)
+      return directResult
+    }
+  }
+
+  recordFailureTraceStep('douyin.id.resolve.redirect.request', {
+    url
+  })
+  const { finalUrl: longLink, transientCookieHeader } = await resolveDouyinShortRedirect(url)
+  recordFailureTraceStep('douyin.id.resolve.redirect.response', {
+    finalUrl: longLink
+  })
+  const result = parseDouyinLongLink(longLink)
+  if (!result.type) logger.warn('无法获取作品ID')
+
+  if (result.type === 'one_work') {
+    result.resolvedUrl = longLink
+    result.typeHint = getDouyinTypeHintFromLink(longLink)
+    result.transientCookieHeader = transientCookieHeader
+  }
+
+  recordFailureTraceStep('douyin.id.resolve.result', result)
+  log && logger.debug('[Douyin] 链接解析结果:', result)
   return result
 }

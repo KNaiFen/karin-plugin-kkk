@@ -3,7 +3,6 @@ import type {
   RichTextCodeBlockNode,
   RichTextDocument,
   RichTextEmojiNode,
-  RichTextHashtagNode,
   RichTextHeadingNode,
   RichTextImageNode,
   RichTextLineBreakNode,
@@ -19,7 +18,6 @@ import type {
   RichTextAtNode,
   RichTextLotteryNode,
   RichTextWebLinkNode,
-  RichTextOpusLinkNode,
   RichTextVoteNode,
   RichTextViewPictureNode,
   RichTextHorizontalRuleNode,
@@ -90,13 +88,6 @@ export const createWebLinkNode = (text: string, jumpUrl: string): RichTextWebLin
   type: 'webLink',
   text,
   jumpUrl
-})
-
-/** 创建站内图文链接节点。 */
-export const createOpusLinkNode = (text: string, url: string): RichTextOpusLinkNode => ({
-  type: 'opusLink',
-  text,
-  url
 })
 
 /** 创建投票节点。 */
@@ -177,16 +168,6 @@ export const createLinkCardNode = (
 })
 
 /**
- * 创建 hashtag 节点。
- *
- * 纯文本高亮，不带任何图标。适用于抖音等平台的 #话题# 展示。
- */
-export const createHashtagNode = (text: string): RichTextHashtagNode => ({
-  type: 'hashtag',
-  text
-})
-
-/**
  * 合并相邻文本节点并丢弃空文本节点。
  *
  * 这样 core 可以按匹配过程简单 push 节点，最后统一整理，避免前端拿到碎片过多的数据。
@@ -229,12 +210,10 @@ export const extractRichTextPlainText = (document: RichTextDocument): string => 
       case 'at':
       case 'lottery':
       case 'webLink':
-      case 'opusLink':
       case 'vote':
       case 'viewPicture':
-      case 'hashtag':
       case 'emoji':
-        return 'text' in node ? ((node as any).text ?? '') : ((node as any).name ?? '')
+        return 'text' in node ? (node as any).text ?? '' : (node as any).name ?? ''
       case 'heading':
       case 'paragraph':
       case 'blockquote':
@@ -264,7 +243,10 @@ export const extractRichTextPlainText = (document: RichTextDocument): string => 
  *
  * 这里不会生成任何 HTML，只返回可序列化 JSON，适合作为 core 到 template 的数据边界。
  */
-export const createRichTextDocument = (nodes: RichTextNode[], options: { platform?: string } = {}): RichTextDocument => ({
+export const createRichTextDocument = (
+  nodes: RichTextNode[],
+  options: { platform?: string } = {}
+): RichTextDocument => ({
   version: 1,
   platform: options.platform,
   nodes: normalizeRichTextNodes(nodes)

@@ -1,11 +1,24 @@
 'use client'
 
-import { Autocomplete, Button, Chip, ListBox, ProgressCircle, Spinner, useFilter } from '@heroui/react'
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-
-import { CodeDiffViewer } from '@/components/code-diff'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Autocomplete,
+  Button,
+  Chip,
+  ListBox,
+  ProgressCircle,
+  Spinner,
+  useFilter
+} from '@heroui/react'
 import { cn } from '@/lib/cn'
-import { computePackageDiffLite, fetchVersions, type DiffGranularity, type FileDiffResult, type PackageDiffResult } from '@/lib/diff-client'
+import { CodeDiffViewer } from '@/components/code-diff'
+import {
+  computePackageDiffLite,
+  fetchVersions,
+  type DiffGranularity,
+  type FileDiffResult,
+  type PackageDiffResult
+} from '@/lib/diff-client'
 
 /** 文件别名映射：把前端固定的逻辑名称映射到 getBaseName 处理后的路径 */
 const FILE_ALIASES: Record<string, string> = {
@@ -13,7 +26,7 @@ const FILE_ALIASES: Record<string, string> = {
 }
 
 /** 把别名或原始路径解析为可用于匹配 result.files 的实际路径 */
-function resolveFilePath(input: string): string {
+function resolveFilePath (input: string): string {
   // 1. 先查别名表
   if (FILE_ALIASES[input]) return FILE_ALIASES[input]
 
@@ -28,7 +41,7 @@ function resolveFilePath(input: string): string {
 
 type SortMode = 'size' | 'name' | 'default'
 
-function formatBytes(n: number): string {
+function formatBytes (n: number): string {
   if (n === 0) return '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
@@ -36,7 +49,7 @@ function formatBytes(n: number): string {
   return `${(n / k ** i).toFixed(i > 0 ? 1 : 0)} ${sizes[i]}`
 }
 
-export default function DiffPage() {
+export default function DiffPage () {
   const { contains } = useFilter({ sensitivity: 'base' })
 
   const [versions, setVersions] = useState<string[]>([])
@@ -145,7 +158,88 @@ export default function DiffPage() {
     }
   }, [versions])
 
-  const handleCompare = useCallback(async () => {
+  // URL 参数触发自动对比
+  useEffect(() => {
+    if (!shouldAutoCompareRef.current) return
+    if (!versions.length) return
+    if (!oldVersion || !newVersion) return
+    if (!versions.includes(oldVersion) || !versions.includes(newVersion)) return
+
+    shouldAutoCompareRef.current = false
+    handleCompare()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versions, oldVersion, newVersion])
+
+  // 响应式检测
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  // 同步 URL 查询参数：开始对比或切换文件后自动更新地址栏
+  useEffect(() => {
+    if (!result || typeof window === 'undefined') return
+    const params = new URLSearchParams()
+    if (oldVersion) params.set('old', oldVersion)
+    if (newVersion) params.set('new', newVersion)
+    if (selectedFile) {
+      const aliasEntry = Object.entries(FILE_ALIASES).find(([, v]) => v === selectedFile)
+      params.set('file', aliasEntry?.[0] ?? selectedFile)
+    }
+    const newUrl = `${window.location.pathname}?${params.toString()}`
+    window.history.replaceState({}, '', newUrl)
+  }, [oldVersion, newVersion, selectedFile, result])
+
+  // 切换对比精度时清空缓存并重新计算
+  useEffect(() => {
+    if (!result) return
+    diffCacheRef.current.clear()
+    computingFileRef.current = ''
+    setResult((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        files: prev.files.map((f) =>
+          f.status === 'unchanged' ? f : { ...f, rows: [], additions: 0, deletions: 0 }
+        )
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diffGranularity])
+
+  // 按需计算当前选中文件的 diff（通过 Web Worker）
+  useEffect(() => {
+    if (!selectedFile || !result) return
+    const file = result.files.find((f) => f.path === selectedFile)
+    if (!file || file.status === 'unchanged' || file.rows.length > 0) return
+
+    const cached = diffCacheRef.current.get(selectedFile)
+    if (cached) {
+      setResult((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          files: prev.files.map((f) => (f.path === selectedFile ? cached : f))
+        }
+      })
+      return
+    }
+
+    if (computingFileRef.current === selectedFile) return
+    computingFileRef.current = selectedFile
+
+    const source = diffSourcesRef.current.get(selectedFile)
+    if (!source || !workerRef.current) return
+
+    const oldText = source.oldContent ? new TextDecoder().decode(source.oldContent) : ''
+    const newText = source.newContent ? new TextDecoder().decode(source.newContent) : ''
+
+    workerRef.current.postMessage({ oldText, newText, path: selectedFile, granularity: diffGranularity })
+  }, [selectedFile, result, diffGranularity])
+
+  const handleCompare = async () => {
     if (!oldVersion || !newVersion) {
       setError('请选择旧版本和新版本')
       return
@@ -195,90 +289,14 @@ export default function DiffPage() {
         setComparing(false)
       }
     }
-  }, [oldVersion, newVersion])
-
-  // URL 参数触发自动对比
-  useEffect(() => {
-    if (!shouldAutoCompareRef.current) return
-    if (!versions.length) return
-    if (!oldVersion || !newVersion) return
-    if (!versions.includes(oldVersion) || !versions.includes(newVersion)) return
-
-    shouldAutoCompareRef.current = false
-    handleCompare()
-  }, [versions, oldVersion, newVersion, handleCompare])
-
-  // 响应式检测
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
-
-  // 同步 URL 查询参数：开始对比或切换文件后自动更新地址栏
-  useEffect(() => {
-    if (!result || typeof window === 'undefined') return
-    const params = new URLSearchParams()
-    if (oldVersion) params.set('old', oldVersion)
-    if (newVersion) params.set('new', newVersion)
-    if (selectedFile) {
-      const aliasEntry = Object.entries(FILE_ALIASES).find(([, v]) => v === selectedFile)
-      params.set('file', aliasEntry?.[0] ?? selectedFile)
-    }
-    const newUrl = `${window.location.pathname}?${params.toString()}`
-    window.history.replaceState({}, '', newUrl)
-  }, [oldVersion, newVersion, selectedFile, result])
-
-  // 切换对比精度时清空缓存并重新计算
-  useEffect(() => {
-    diffCacheRef.current.clear()
-    computingFileRef.current = ''
-    setResult((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        files: prev.files.map((f) => (f.status === 'unchanged' ? f : { ...f, rows: [], additions: 0, deletions: 0 }))
-      }
-    })
-  }, [diffGranularity])
-
-  // 按需计算当前选中文件的 diff（通过 Web Worker）
-  useEffect(() => {
-    if (!selectedFile || !result) return
-    const file = result.files.find((f) => f.path === selectedFile)
-    if (!file || file.status === 'unchanged' || file.rows.length > 0) return
-
-    const cached = diffCacheRef.current.get(selectedFile)
-    if (cached) {
-      setResult((prev) => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          files: prev.files.map((f) => (f.path === selectedFile ? cached : f))
-        }
-      })
-      return
-    }
-
-    if (computingFileRef.current === selectedFile) return
-    computingFileRef.current = selectedFile
-
-    const source = diffSourcesRef.current.get(selectedFile)
-    if (!source || !workerRef.current) return
-
-    const oldText = source.oldContent ? new TextDecoder().decode(source.oldContent) : ''
-    const newText = source.newContent ? new TextDecoder().decode(source.newContent) : ''
-
-    workerRef.current.postMessage({ oldText, newText, path: selectedFile, granularity: diffGranularity })
-  }, [selectedFile, result, diffGranularity])
+  }
 
   const sortedFiles = useMemo(() => {
     if (!result) return []
     const files = [...result.files]
     switch (sortMode) {
       case 'size':
-        files.sort((a, b) => b.oldSize + b.newSize - (a.oldSize + a.newSize))
+        files.sort((a, b) => (b.oldSize + b.newSize) - (a.oldSize + a.newSize))
         break
       case 'name':
         files.sort((a, b) => a.path.localeCompare(b.path))
@@ -293,9 +311,13 @@ export default function DiffPage() {
     return files
   }, [result, sortMode])
 
-  const selectedDiff = useMemo(() => sortedFiles.find((f) => f.path === selectedFile) ?? null, [sortedFiles, selectedFile])
+  const selectedDiff = useMemo(() =>
+    sortedFiles.find((f) => f.path === selectedFile) ?? null
+  , [sortedFiles, selectedFile])
 
-  const changedFiles = useMemo(() => sortedFiles.filter((f) => f.status !== 'unchanged'), [sortedFiles])
+  const changedFiles = useMemo(() =>
+    sortedFiles.filter((f) => f.status !== 'unchanged')
+  , [sortedFiles])
 
   const statusChip = (status: FileDiffResult['status']) => {
     switch (status) {
@@ -327,7 +349,7 @@ export default function DiffPage() {
   }
 
   return (
-    <div className="md:h-screen md:min-h-0 md:flex md:flex-col md:overflow-hidden bg-background">
+    <div className="md:h-screen md:flex md:flex-col md:overflow-hidden bg-background">
       {/* 顶部控制栏 */}
       <div className="shrink-0 px-6 py-4 flex flex-wrap items-end gap-4 bg-surface-secondary border-b border-border">
         {isMobile && result && (
@@ -341,7 +363,9 @@ export default function DiffPage() {
           </Button>
         )}
         <div>
-          <label className="block text-xs font-medium mb-1 text-muted">旧版本</label>
+          <label className="block text-xs font-medium mb-1 text-muted">
+            旧版本
+          </label>
           <Autocomplete
             value={oldVersion}
             onChange={(key) => setOldVersion(String(key ?? ''))}
@@ -370,7 +394,9 @@ export default function DiffPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-1 text-muted">新版本</label>
+          <label className="block text-xs font-medium mb-1 text-muted">
+            新版本
+          </label>
           <Autocomplete
             value={newVersion}
             onChange={(key) => setNewVersion(String(key ?? ''))}
@@ -399,13 +425,17 @@ export default function DiffPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-1 text-muted">对比精度</label>
+          <label className="block text-xs font-medium mb-1 text-muted">
+            对比精度
+          </label>
           <div className="flex gap-1">
             <button
               onClick={() => setDiffGranularity('word')}
               className={cn(
                 'px-2 py-1 text-xs rounded transition-colors',
-                diffGranularity === 'word' ? 'bg-surface-secondary text-foreground' : 'text-muted'
+                diffGranularity === 'word'
+                  ? 'bg-surface-secondary text-foreground'
+                  : 'text-muted'
               )}
             >
               单词
@@ -414,7 +444,9 @@ export default function DiffPage() {
               onClick={() => setDiffGranularity('char')}
               className={cn(
                 'px-2 py-1 text-xs rounded transition-colors',
-                diffGranularity === 'char' ? 'bg-surface-secondary text-foreground' : 'text-muted'
+                diffGranularity === 'char'
+                  ? 'bg-surface-secondary text-foreground'
+                  : 'text-muted'
               )}
             >
               字符
@@ -423,7 +455,9 @@ export default function DiffPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-1 text-muted">自动换行</label>
+          <label className="block text-xs font-medium mb-1 text-muted">
+            自动换行
+          </label>
           <button
             onClick={() => setWrapEnabled(!wrapEnabled)}
             className={cn(
@@ -435,99 +469,127 @@ export default function DiffPage() {
           </button>
         </div>
 
-        <Button size="sm" onPress={handleCompare} isDisabled={comparing} className="font-medium bg-success text-success-foreground">
+        <Button
+          size="sm"
+          onPress={handleCompare}
+          isDisabled={comparing}
+          className="font-medium bg-success text-success-foreground"
+        >
           {comparing ? (
             <span className="flex items-center gap-2">
               <Spinner size="sm" className="text-white" aria-label="加载中" />
               对比中...
             </span>
-          ) : (
-            '开始对比'
-          )}
+          ) : '开始对比'}
         </Button>
 
         {result && (
           <div className="flex items-center gap-3 text-sm ml-auto">
-            <span className="text-muted">共 {changedFiles.length} 个文件变更</span>
-            <span className="text-success">+{changedFiles.reduce((s, f) => s + f.additions, 0)}</span>
-            <span className="text-danger">−{changedFiles.reduce((s, f) => s + f.deletions, 0)}</span>
+            <span className="text-muted">
+              共 {changedFiles.length} 个文件变更
+            </span>
+            <span className="text-success">
+              +{changedFiles.reduce((s, f) => s + f.additions, 0)}
+            </span>
+            <span className="text-danger">
+              −{changedFiles.reduce((s, f) => s + f.deletions, 0)}
+            </span>
           </div>
         )}
       </div>
 
       {/* 错误提示 */}
-      {error && <div className="shrink-0 mx-6 mt-4 p-3 rounded-lg text-sm bg-danger-soft text-danger">{error}</div>}
+      {error && (
+        <div className="shrink-0 mx-6 mt-4 p-3 rounded-lg text-sm bg-danger-soft text-danger">
+          {error}
+        </div>
+      )}
 
       {/* 主体内容 */}
       {result ? (
         <>
-          {isMobile && sidebarOpen && <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setSidebarOpen(false)} />}
-          <div className="flex min-h-0 flex-col md:flex-row md:flex-1 md:overflow-hidden relative">
+          {isMobile && sidebarOpen && (
+            <div
+              className="fixed inset-0 z-40 bg-black/50"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+          <div className="flex flex-col md:flex-row md:flex-1 md:overflow-hidden relative">
             {/* 左侧文件列表 */}
             <div
               className={cn(
-                'min-h-0 shrink-0 flex flex-col bg-background border-r border-border',
+                'shrink-0 flex flex-col bg-background border-r border-border',
                 isMobile && 'fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200 ease-out',
                 !isMobile && 'w-72',
                 isMobile && !sidebarOpen && '-translate-x-full'
               )}
             >
-              {/* 文件列表头部 */}
-              <div className="shrink-0 px-3 py-2 flex items-center justify-between bg-surface-secondary text-muted border-b border-border">
-                <span className="text-xs font-medium">文件列表 ({result.files.length})</span>
-                <div className="flex items-center gap-1">
-                  {(['size', 'name', 'default'] as SortMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => setSortMode(mode)}
-                      className={cn(
-                        'px-2 py-0.5 text-[10px] rounded transition-colors',
-                        sortMode === mode ? 'bg-surface-secondary text-foreground' : 'text-muted'
-                      )}
-                    >
-                      {mode === 'size' ? '大小' : mode === 'name' ? '名称' : '默认'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 文件列表内容 - 可滚动，隐藏滚动条 */}
-              <div data-lenis-prevent className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
-                <div className="py-1">
-                  {sortedFiles.map((file) => (
-                    <button
-                      key={file.path}
-                      onClick={() => {
-                        setSelectedFile(file.path)
-                        if (isMobile) setSidebarOpen(false)
-                      }}
-                      className={cn(
-                        'w-full text-left px-3 py-2 flex items-center gap-2 transition-colors hover:opacity-80',
-                        selectedFile === file.path && 'bg-border/40'
-                      )}
-                    >
-                      <span className="text-xs truncate flex-1 text-foreground">{file.path}</span>
-                      <span className="text-[10px] shrink-0 text-muted">{formatBytes(file.oldSize + file.newSize)}</span>
-                      {selectedFile === file.path && file.status !== 'unchanged' && file.rows.length === 0 && (
-                        <Spinner size="sm" className="shrink-0 text-muted" aria-label="加载中" />
-                      )}
-                      {statusChip(file.status)}
-                    </button>
-                  ))}
-                </div>
+            {/* 文件列表头部 */}
+            <div className="shrink-0 px-3 py-2 flex items-center justify-between bg-surface-secondary text-muted border-b border-border">
+              <span className="text-xs font-medium">
+                文件列表 ({result.files.length})
+              </span>
+              <div className="flex items-center gap-1">
+                {(['size', 'name', 'default'] as SortMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setSortMode(mode)}
+                    className={cn(
+                      'px-2 py-0.5 text-[10px] rounded transition-colors',
+                      sortMode === mode
+                        ? 'bg-surface-secondary text-foreground'
+                        : 'text-muted'
+                    )}
+                  >
+                    {mode === 'size' ? '大小' : mode === 'name' ? '名称' : '默认'}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* 右侧 diff 内容 */}
-            <div className="w-full min-h-0 min-w-0 h-dvh md:h-full md:flex-1">
-              {selectedDiff ? (
-                <CodeDiffViewer data={selectedDiff} isMobile={isMobile} wrap={wrapEnabled} />
-              ) : (
-                <div className="flex items-center justify-center h-full text-sm text-muted">请从左侧选择一个文件</div>
-              )}
+            {/* 文件列表内容 - 可滚动，隐藏滚动条 */}
+            <div className="flex-1 overflow-y-auto no-scrollbar">
+              <div className="py-1">
+                {sortedFiles.map((file) => (
+                  <button
+                    key={file.path}
+                    onClick={() => {
+                      setSelectedFile(file.path)
+                      if (isMobile) setSidebarOpen(false)
+                    }}
+                    className={cn(
+                      'w-full text-left px-3 py-2 flex items-center gap-2 transition-colors hover:opacity-80',
+                      selectedFile === file.path && 'bg-border/40'
+                    )}
+                  >
+                    <span className="text-xs truncate flex-1 text-foreground">
+                      {file.path}
+                    </span>
+                    <span className="text-[10px] shrink-0 text-muted">
+                      {formatBytes(file.oldSize + file.newSize)}
+                    </span>
+                    {selectedFile === file.path && file.status !== 'unchanged' && file.rows.length === 0 && (
+                      <Spinner size="sm" className="shrink-0 text-muted" aria-label="加载中" />
+                    )}
+                    {statusChip(file.status)}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </>
+
+          {/* 右侧 diff 内容 */}
+          <div className="w-full h-dvh md:h-auto md:flex-1">
+            {selectedDiff ? (
+              <CodeDiffViewer data={selectedDiff} isMobile={isMobile} wrap={wrapEnabled} />
+            ) : (
+              <div className="flex items-center justify-center h-full text-sm text-muted">
+                请从左侧选择一个文件
+              </div>
+            )}
+          </div>
+        </div>
+      </>
       ) : comparing ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
           <ProgressCircle isIndeterminate aria-label="加载中" color="success">
@@ -536,10 +598,14 @@ export default function DiffPage() {
               <ProgressCircle.FillCircle />
             </ProgressCircle.Track>
           </ProgressCircle>
-          <span className="text-sm text-muted">正在下载并对比版本...</span>
+          <span className="text-sm text-muted">
+            正在下载并对比版本...
+          </span>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-sm text-muted">选择两个版本并点击「开始对比」</div>
+        <div className="flex-1 flex items-center justify-center text-sm text-muted">
+          选择两个版本并点击「开始对比」
+        </div>
       )}
     </div>
   )

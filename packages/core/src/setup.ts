@@ -1,11 +1,14 @@
-import '@/module/server'
+import '@/module/server/Register'
 import '@/platform/bilibili/riskControl'
-import karin, { AdapterType, BOT_CONNECT, config, ImageElement, logger, Message, mkdirSync, SendMessage } from 'node-karin'
+
+import karin, { AdapterType, BOT_CONNECT, ImageElement, logger, Message, mkdirSync, SendMessage } from 'node-karin'
 import { karinPathBase } from 'node-karin/root'
 
 import { Common, Render, Root } from '@/module'
 import { initAllDatabases } from '@/module/db'
+import { getConfiguredMasters } from '@/module/utils/master'
 
+import { guestCookieManager } from './module/utils/GuestCookieManager'
 import { isSemverGreater } from './module/utils/semver'
 
 declare const __REQUIRE_KARIN_VERSION__: string
@@ -27,13 +30,14 @@ if (process.env.NODE_ENV !== 'development' && isSemverGreater(requireVersion, Ro
     if (botId === 'console') return
 
     // 增加延迟，确保 bot 完全初始化
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    const masters = config.master()
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    const masters = getConfiguredMasters()
 
     logger.info(`[karin-plugin-kkk] 监测到 Bot 连接: ${botId}, 准备发送版本警告`)
 
     // 生成警告图片
     let warningImage: ImageElement[] | null = null
+
 
     for (const master of masters) {
       if (master === 'console') continue
@@ -75,3 +79,11 @@ await initAllDatabases().catch((err) => {
 mkdirSync(`${karinPathBase}/${Root.pluginName}/data`)
 mkdirSync(Common.tempDri.images)
 mkdirSync(Common.tempDri.video)
+mkdirSync(Common.tempDri.cache.root)
+mkdirSync(Common.tempDri.cache.parsedPost)
+mkdirSync(Common.tempDri.cache.workBundle)
+mkdirSync(Common.tempDri.cache.media)
+mkdirSync(Common.tempDri.cache.renderAssets)
+mkdirSync(Common.tempDri.cache.derived)
+
+guestCookieManager.start()

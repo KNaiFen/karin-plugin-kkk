@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-import type { ChangelogData } from '@template/template/other/changelog/components/types'
+import type { ChangelogProps } from '@kkk/template-contracts'
 import { Message, parseChangelog, range } from 'node-karin'
 import axios from 'node-karin/axios'
 
@@ -28,7 +28,9 @@ const getLagVersionCount = (changelog: string, localVersion: string, remoteVersi
 
   if (!local || !remote || !isSemverGreater(remote, local)) return 0
 
-  const versions = Object.keys(parseChangelog(changelog)).map(versionCore).filter(Boolean)
+  const versions = Object.keys(parseChangelog(changelog))
+    .map(versionCore)
+    .filter(Boolean)
 
   const uniqueVersions = [...new Set(versions)]
   return uniqueVersions.filter((version) => {
@@ -55,12 +57,13 @@ const getRemoteBuildMetadata = async (version: string) => {
   ]
 
   const requests = urls.map((url) =>
-    axios.get(url, { timeout: 10000, headers: baseHeaders }).then((res) => {
-      if (res.data && typeof res.data === 'object') {
-        return res.data
-      }
-      throw new Error('Invalid metadata')
-    })
+    axios.get(url, { timeout: 10000, headers: baseHeaders })
+      .then((res) => {
+        if (res.data && typeof res.data === 'object') {
+          return res.data
+        }
+        throw new Error('Invalid metadata')
+      })
   )
 
   try {
@@ -79,11 +82,16 @@ const getRemoteBuildMetadata = async (version: string) => {
  * @param props.isRemote - 是否强制获取远程变更日志
  * @returns 变更日志图片元素数组（base64）
  */
-export const getChangelogImage = async (ctx: Message, props: Omit<ChangelogData, 'markdown'> & { isRemote?: boolean }) => {
+export const getChangelogImage = async (
+  ctx: Message,
+  props: Omit<ChangelogProps['data'], 'markdown'> & { isRemote?: boolean }
+) => {
   let changelog = ''
   let buildTime: string | undefined
   let lagVersionCount = 0
-  const event = 'bot' in (ctx as any) ? (ctx as Message) : ({ bot: ctx } as unknown as Message)
+  const event = ('bot' in (ctx as any))
+    ? (ctx as Message)
+    : ({ bot: ctx } as unknown as Message)
 
   if (props.Tip || props.isRemote) {
     const urls = [
@@ -111,12 +119,13 @@ export const getChangelogImage = async (ctx: Message, props: Omit<ChangelogData,
 
     // 并发竞速获取 CHANGELOG
     const requests = urls.map((url) =>
-      axios.get(url, { timeout: 10000, headers: baseHeaders }).then((res) => {
-        if (typeof res.data === 'string' && res.data.length > 0) {
-          return res.data as string
-        }
-        throw new Error('Invalid changelog content')
-      })
+      axios.get(url, { timeout: 10000, headers: baseHeaders })
+        .then((res) => {
+          if (typeof res.data === 'string' && res.data.length > 0) {
+            return res.data as string
+          }
+          throw new Error('Invalid changelog content')
+        })
     )
     try {
       changelog = await Promise.any(requests)

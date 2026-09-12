@@ -1,6 +1,9 @@
-import util from 'node:util'
-
-import { formatBuildTime, Render, Root } from '@/module'
+import { Render, Root } from '@/module'
+import {
+  formatFailureTraceTime,
+  resolveFailureTraceEventTime,
+  sanitizeFailureTraceText
+} from '@/module/utils/ErrorTrace'
 
 import type { ErrorContext, RenderErrorOptions } from './types'
 
@@ -13,7 +16,7 @@ import type { ErrorContext, RenderErrorOptions } from './types'
  *
  * @remarks
  * 使用 `other/handlerError` 模板渲染错误信息图片，
- * 包含错误详情、日志、触发命令、版本信息等
+ * 通知仅包含业务摘要和诊断追踪编号，详细信息保存在本地 trace 文件
  *
  * @example
  * ```ts
@@ -26,33 +29,31 @@ import type { ErrorContext, RenderErrorOptions } from './types'
  * ```
  */
 export const renderErrorImage = async (ctx: ErrorContext, opts: RenderErrorOptions = {}) => {
-  const { error, options, logs, event, buildMetadata, adapterInfo } = ctx
+  const { traceId, options, event } = ctx
+  const businessName = sanitizeFailureTraceText(options.businessName)
+  const errorName = sanitizeFailureTraceText(opts.errorName || 'BusinessError')
+  const errorMessage = sanitizeFailureTraceText(
+    opts.errorMessage || '业务处理失败，诊断详情已记录'
+  )
 
   return Render(event, 'other/handlerError', {
     type: 'business_error',
     platform: opts.platform || 'system',
     error: {
-      message: opts.errorMessage || error.message,
-      name: opts.errorName || error.name,
-      stack:
-        opts.stack ||
-        util
-          .inspect(error, { depth: 10, colors: true, breakLength: 120, showHidden: true })
-          // oxlint-disable-next-line no-control-regex
-          .replace(/\x1b\[90m/g, '\x1b[90;2m')
-          // oxlint-disable-next-line no-control-regex
-          .replace(/\x1b\[32m/g, '\x1b[31m'),
-      businessName: options.businessName
+      message: errorMessage,
+      name: errorName,
+      stack: `Trace ID: ${traceId}`,
+      businessName
     },
-    method: options.businessName,
-    timestamp: new Date().toISOString(),
-    logs: logs?.slice().reverse(),
-    triggerCommand: event?.msg || '未知命令或处于非消息环境',
+    method: businessName,
+    timestamp: formatFailureTraceTime(resolveFailureTraceEventTime(event?.time) ?? new Date()),
+    logs: undefined,
+    triggerCommand: undefined,
     frameworkVersion: Root.karinVersion,
     pluginVersion: Root.pluginVersion,
-    buildTime: buildMetadata?.buildTime ? formatBuildTime(buildMetadata.buildTime) : undefined,
-    commitHash: buildMetadata?.commitHash,
-    adapterInfo,
+    buildTime: undefined,
+    commitHash: undefined,
+    adapterInfo: undefined,
     isVerification: opts.isVerification,
     verificationUrl: opts.verificationUrl,
     share_url: opts.share_url

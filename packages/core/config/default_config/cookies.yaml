@@ -5,7 +5,22 @@ douyin:
 bilibili:
 
 # 快手ck
-kuaishou:
+kuaishou: 
 
 # 小红书ck
 xiaohongshu:
+
+# TikTok ck
+tiktok:
+
+# 小黑盒ck
+heybox:
+
+# 知乎ck
+zhihu:
+
+# 贴吧ck
+tieba:
+
+# 微博ck
+weibo:

@@ -1,0 +1,28 @@
+# 贴吧解析开关，单独开关，受「总开关」影响
+switch: true
+
+# 解析时发送的内容，可选值：info(帖子信息)、comment(评论文本)、image(帖子图片)、video(视频文件)
+sendContent:
+  - info
+  - image
+  - video
+
+# 外链内容渲染图设置
+renderCard:
+  # 是否启用渲染图发送
+  enable: true
+  # 渲染图发送成功后，是否把解析出来的原图并入同一个图片合集
+  includeImages: false
+
+# 纯链接补发标题设置
+plainTitleReply:
+  # 消息内容只有贴吧链接时，解析成功后额外发送「【贴吧】作者：标题」
+  switch: true
+  # 哪些内容类型触发补发标题，可选：text、image、video
+  types:
+    - text
+    - image
+    - video
+
+# 评论解析数量，范围1~30条
+numcomment: 5

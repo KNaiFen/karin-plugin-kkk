@@ -1,9 +1,20 @@
 import { logger } from 'node-karin'
-import type { AxiosInstance, AxiosRequestConfig, AxiosResponse, ResponseType } from 'node-karin/axios'
+import type {
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  ResponseType
+} from 'node-karin/axios'
 import axios, { AxiosError } from 'node-karin/axios'
 
+import { Config } from '@/module/utils/Config'
+import { normalizeAxiosProxy } from '@/module/utils/RequestConfig'
 import { NetworksConfigType } from '@/types'
 
+import {
+  executeSafeAxiosRequest,
+  type OutboundRequestProfile
+} from '../OutboundRequest'
 import { BASE_HEADERS } from './constants'
 import { Downloader } from './Downloader'
 import { extractTotalBytesFromHeaders, getErrorDescription, isRecoverableNetworkError, sanitizeHeaders } from './helpers'
@@ -24,6 +35,9 @@ export class Network {
   private filepath: string
   private maxRetries: number
   private throttleConfig?: Partial<ThrottleConfig>
+  private networkOptions?: Pick<AxiosRequestConfig, 'httpAgent' | 'httpsAgent' | 'proxy'>
+  private outboundProfile?: OutboundRequestProfile
+  private maxContentLength?: number
 
   /**
    * 创建网络请求实例
@@ -35,12 +49,18 @@ export class Network {
    *
    * @param data - 配置对象
    */
-  constructor(data: NetworksConfigType & { throttle?: Partial<ThrottleConfig> }) {
-    this.headers = data.headers ? Object.fromEntries(Object.entries(data.headers).map(([key, value]) => [key, String(value)])) : {}
+  constructor (data: NetworksConfigType & { throttle?: Partial<ThrottleConfig> }) {
+    this.headers = data.headers
+      ? Object.fromEntries(
+        Object.entries(data.headers).map(([key, value]) => [key, String(value)])
+      )
+      : {}
 
     // 合并默认头
     this.headers = {
-      ...Object.fromEntries(Object.entries(BASE_HEADERS ?? {}).map(([key, value]) => [key, String(value)])),
+      ...Object.fromEntries(
+        Object.entries(BASE_HEADERS ?? {}).map(([key, value]) => [key, String(value)])
+      ),
       ...this.headers
     }
 
@@ -52,13 +72,23 @@ export class Network {
     this.filepath = data.filepath ?? ''
     this.maxRetries = data.maxRetries ?? 3
     this.throttleConfig = data.throttle
+    const defaultProxy = normalizeAxiosProxy(Config.request.proxy)
+    this.networkOptions = {
+      proxy: defaultProxy,
+      ...(data.networkOptions ?? {})
+    }
+    this.outboundProfile = data.outboundProfile
+    this.maxContentLength = data.maxContentLength
 
     // 创建 axios 实例
     this.axiosInstance = axios.create({
       timeout: this.timeout,
       headers: this.headers,
-      maxRedirects: 5,
-      validateStatus: () => true
+      maxRedirects: 0,
+      validateStatus: () => true,
+      maxContentLength: this.maxContentLength,
+      maxBodyLength: this.maxContentLength,
+      ...this.networkOptions
     })
 
     // 添加响应拦截器处理重试
@@ -81,21 +111,21 @@ export class Network {
       config.__retryCount += 1
 
       const nextDelay = Math.max(1000, Math.min(2 ** (config.__retryCount - 1) * 1000, 8000))
-      logger.warn(
-        `[karin-plugin-kkk] axios 实例请求失败，正在重试... (${config.__retryCount}/${this.maxRetries})，将在 ${nextDelay / 1000} 秒后重试`
-      )
+      logger.warn(`[karin-plugin-kkk] axios 实例请求失败，正在重试... (${config.__retryCount}/${this.maxRetries})，将在 ${nextDelay / 1000} 秒后重试`)
 
-      await new Promise((resolve) => setTimeout(resolve, nextDelay))
+      await new Promise(resolve => setTimeout(resolve, nextDelay))
       return this.axiosInstance(config)
     })
   }
 
-  get config(): AxiosRequestConfig {
+  get config (): AxiosRequestConfig {
     const config: AxiosRequestConfig = {
       url: this.url,
       method: this.method,
       headers: this.headers,
-      responseType: this.type
+      responseType: this.type,
+      maxContentLength: this.maxContentLength,
+      maxBodyLength: this.maxContentLength
     }
 
     if (this.method === 'POST' && this.body) {
@@ -112,7 +142,10 @@ export class Network {
    * @param progressCallback 进度回调函数
    * @param retryCount 重试次数（内部使用）
    */
-  async downloadStream(progressCallback: ProgressCallback, retryCount = 0): Promise<DownloadResult> {
+  async downloadStream (
+    progressCallback: ProgressCallback,
+    retryCount = 0
+  ): Promise<DownloadResult> {
     const downloader = new Downloader(
       this.axiosInstance,
       this.url,
@@ -120,13 +153,14 @@ export class Network {
       this.headers,
       this.timeout,
       this.maxRetries,
-      this.throttleConfig
+      this.throttleConfig,
+      this.outboundProfile
     )
 
     return downloader.download(progressCallback, retryCount)
   }
 
-  async getfetch(): Promise<AxiosResponse | boolean> {
+  async getfetch (): Promise<AxiosResponse | boolean> {
     try {
       return await this.returnResult()
     } catch (error) {
@@ -135,18 +169,24 @@ export class Network {
     }
   }
 
-  async returnResult(): Promise<AxiosResponse> {
-    let response = {} as AxiosResponse
+  async returnResult (): Promise<AxiosResponse> {
     try {
-      response = await this.axiosInstance(this.config)
+      const { response } = await executeSafeAxiosRequest({
+        ...(this.config as AxiosRequestConfig),
+        url: this.url
+      } as any, {
+        profile: this.outboundProfile,
+        maxBytes: this.maxContentLength
+      })
+      return response
     } catch (error) {
       logger.error(error)
+      return {} as AxiosResponse
     }
-    return response
   }
 
   /** 获取最终地址（跟随重定向） */
-  async getLongLink(url = '', depth = 0): Promise<string> {
+  async getLongLink (url = '', depth = 0): Promise<string> {
     const MAX_REDIRECTS = 10
 
     if (depth > MAX_REDIRECTS) {
@@ -154,43 +194,39 @@ export class Network {
     }
 
     const targetUrl = this.url || url
-    try {
-      new URL(targetUrl)
-    } catch {
-      const sanitized = sanitizeHeaders(this.headers)
-      throw new Error(`Invalid URL: ${targetUrl || '(empty)'}, Headers: ${JSON.stringify(sanitized)}`)
-    }
-
     const methods = ['head', 'get'] as const
     let lastError: Error | null = null
 
     for (const method of methods) {
       try {
-        const response = await this.axiosInstance.request({
+        const responseType = method === 'head' ? 'text' : 'stream'
+        const { finalUrl, response } = await executeSafeAxiosRequest({
           url: targetUrl,
           method,
-          maxRedirects: 5,
-          validateStatus: (status) => status >= 200 && status < 400,
+          timeout: this.timeout,
           headers: method === 'get' ? { ...this.headers, Range: 'bytes=0-0' } : this.headers,
-          skipRetry: true
-        } as CustomAxiosRequestConfig)
+          validateStatus: (status) => status >= 200 && status < 400,
+          httpAgent: this.networkOptions?.httpAgent,
+          httpsAgent: this.networkOptions?.httpsAgent,
+          proxy: this.networkOptions?.proxy,
+          responseType
+        }, {
+          profile: this.outboundProfile ?? 'redirect-resolution',
+          maxRedirects: MAX_REDIRECTS - depth,
+          maxBytes: this.maxContentLength ?? 512 * 1024
+        })
 
-        const finalUrl = (response.request as any)?.res?.responseUrl ?? (response.config as any)?.url ?? targetUrl
+        if (responseType === 'stream') {
+          const stream = response.data as { on?: (event: string, listener: (...args: any[]) => void) => void, destroy?: () => void } | undefined
+          if (stream && typeof stream.destroy === 'function') {
+            stream.on?.('error', () => {})
+            stream.destroy()
+          }
+        }
+
         return finalUrl
       } catch (error) {
         const axiosError = error as AxiosError
-
-        // 处理所有重定向状态码
-        const redirectStatuses = [301, 302, 303, 307, 308]
-        if (axiosError.response?.status && redirectStatuses.includes(axiosError.response.status) && axiosError.response.headers?.location) {
-          const location = axiosError.response.headers.location
-
-          // 处理相对路径重定向
-          const redirectUrl = location.startsWith('http') ? location : new URL(location, targetUrl).href
-
-          logger.info(`检测到${axiosError.response.status}重定向 (深度: ${depth + 1}), 目标: ${redirectUrl}`)
-          return await this.getLongLink(redirectUrl, depth + 1)
-        }
 
         if (method === 'head') {
           logger.debug(`HEAD 请求失败 (${axiosError.code || axiosError.message})，尝试 GET 请求`)
@@ -210,13 +246,21 @@ export class Network {
   }
 
   /** 获取首个302链接 */
-  async getLocation(): Promise<AxiosResponse['headers']['location']> {
+  async getLocation (): Promise<AxiosResponse['headers']['location']> {
     try {
-      const response = await this.axiosInstance({
+      const { response } = await executeSafeAxiosRequest({
         method: 'GET',
         url: this.url,
-        maxRedirects: 0,
+        timeout: this.timeout,
+        headers: this.headers,
+        httpAgent: this.networkOptions?.httpAgent,
+        httpsAgent: this.networkOptions?.httpsAgent,
+        proxy: this.networkOptions?.proxy,
         validateStatus: (status: number) => status >= 300 && status < 400
+      }, {
+        profile: this.outboundProfile ?? 'redirect-resolution',
+        maxRedirects: 0,
+        maxBytes: this.maxContentLength ?? 512 * 1024
       })
       return response.headers.location as string
     } catch (error: unknown) {
@@ -229,7 +273,7 @@ export class Network {
   }
 
   /** 获取数据并处理格式化，默认 json */
-  async getData(): Promise<AxiosResponse['data'] | boolean> {
+  async getData (): Promise<AxiosResponse['data'] | boolean> {
     try {
       const result = await this.returnResult()
       if (result.status === 504) {
@@ -254,22 +298,31 @@ export class Network {
    * 获取响应头信息（仅首个字节）
    * 适用于获取视频流的完整大小
    */
-  async getHeaders(): Promise<AxiosResponse['headers']> {
-    const tryRequest = async (method: 'HEAD' | 'GET', extraHeaders?: Record<string, string>): Promise<AxiosResponse | null> => {
-      const response = await this.axiosInstance.request({
-        ...this.config,
+  async getHeaders (): Promise<AxiosResponse['headers']> {
+    const tryRequest = async (
+      method: 'HEAD' | 'GET',
+      extraHeaders?: Record<string, string>
+    ): Promise<AxiosResponse | null> => {
+      const { response } = await executeSafeAxiosRequest({
+        ...(this.config as AxiosRequestConfig),
+        url: this.url,
         method,
         responseType: 'stream',
-        maxRedirects: 5,
         headers: {
-          ...this.config.headers,
+          ...(this.config.headers as Record<string, string>),
           ...extraHeaders
         },
-        skipRetry: true,
-        validateStatus: () => true
-      } as CustomAxiosRequestConfig)
+        validateStatus: () => true,
+        httpAgent: this.networkOptions?.httpAgent,
+        httpsAgent: this.networkOptions?.httpsAgent,
+        proxy: this.networkOptions?.proxy
+      } as any, {
+        profile: this.outboundProfile,
+        maxRedirects: 5,
+        maxBytes: this.maxContentLength
+      })
 
-      const stream = response.data as { on?: (event: string, listener: (...args: any[]) => void) => void; destroy?: () => void } | undefined
+      const stream = response.data as { on?: (event: string, listener: (...args: any[]) => void) => void, destroy?: () => void } | undefined
       if (stream && typeof stream.destroy === 'function') {
         stream.on?.('error', () => {})
         stream.destroy()
@@ -322,11 +375,18 @@ export class Network {
   /**
    * 获取响应头信息（完整）
    */
-  async getHeadersFull(): Promise<AxiosResponse['headers']> {
+  async getHeadersFull (): Promise<AxiosResponse['headers']> {
     try {
-      const response = await this.axiosInstance({
-        ...this.config,
-        method: 'GET'
+      const { response } = await executeSafeAxiosRequest({
+        ...(this.config as AxiosRequestConfig),
+        url: this.url,
+        method: 'GET',
+        httpAgent: this.networkOptions?.httpAgent,
+        httpsAgent: this.networkOptions?.httpsAgent,
+        proxy: this.networkOptions?.proxy
+      } as any, {
+        profile: this.outboundProfile,
+        maxBytes: this.maxContentLength
       })
       return response.headers
     } catch (error) {

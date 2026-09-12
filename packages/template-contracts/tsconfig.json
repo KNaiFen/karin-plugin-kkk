@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "module": "ESNext",
+    "target": "ES2022",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../richtext"
+    }
+  ]
+}

@@ -1,10 +1,15 @@
+import type { plainTitleReplyConfigCompat } from './plainTitleReply'
+
 /** 定义B站解析工具的配置接口 */
 export interface bilibiliConfig {
   /** B站解析开关，单独开关，受「总开关」影响 */
   switch: boolean
 
-  /** 解析时发送的内容，可选值：'info'(视频信息)、'comment'(评论图片)、'video'(视频文件) */
-  sendContent: ['info' | 'comment' | 'video']
+  /** 解析时发送的内容，可选值：'info'(视频信息)、'comment'(评论图片)、'video'(视频文件/直播片段) */
+  sendContent: ('info' | 'comment' | 'video')[]
+
+  /** 当消息只有链接/BV号/AV号时，解析成功后额外发送作者和标题文本 */
+  plainTitleReply: plainTitleReplyConfigCompat
 
   /** B站评论数量，设置接口返回的评论数量，范围1 ~ x 条 */
   numcomment: number
@@ -33,6 +38,12 @@ export interface bilibiliConfig {
   /** 视频体积上限，自动画质模式下可接受的最大视频大小（单位：MB），仅在 「videoQuality」 为 0 时生效 */
   maxAutoVideoSize: number
 
+  /** B站直播链接录制时长，单位：秒 */
+  liveRecordSeconds: number
+
+  /** B站直播拉流清晰度偏好 */
+  liveQuality: 80 | 150 | 250 | 400 | 10000
+
   /** 谁可以触发扫码登录，all为所有人，admin为管理员，master为主人，group.owner为群主，group.admin为群管理员。修改后需重启 */
   loginPerm: 'all' | 'admin' | 'master' | 'group.owner' | 'group.admin'
 
@@ -50,9 +61,6 @@ export interface bilibiliConfig {
 
   /** 视频信息的内容，可选值：'cover'(封面)、'title'(标题)、'author'(作者)、'stats'(视频统计信息)、'desc'(简介)，数组为空则不显示任何内容 */
   displayContent: ('cover' | 'title' | 'author' | 'stats' | 'desc')[]
-
-  /** 视频信息图片中显示弹幕（仅「视频信息返回形式」为图片模式时生效，关闭后不会请求弹幕数据） */
-  showDanmakuInVideoInfo: boolean
 
   /** 弹幕烧录（将弹幕硬编码到视频画面中，需要重新编码视频） */
   burnDanmaku: boolean
@@ -97,10 +105,14 @@ export interface bilibiliConfig {
     permission: 'all' | 'admin' | 'master' | 'group.owner' | 'group.admin'
     /** 推送表达式 */
     cron: string
+    /** 定时任务触发后的随机延迟上限（秒），0 表示关闭 */
+    jitterSeconds: number
+    /** 命中 B站 风控后是否进入全局冷却 */
+    riskCooldownEnabled: boolean
+    /** 命中 B站 风控后的全局冷却时长，单位毫秒 */
+    riskCooldownMs: number
     /** 推送时是否一同解析该动态 */
-    parsedynamic: boolean
-    /** 开启推送解析后，需要进一步解析的动态类型 */
-    parseDynamicTypes: ('DYNAMIC_TYPE_AV' | 'DYNAMIC_TYPE_DRAW' | 'DYNAMIC_TYPE_ARTICLE')[]
+    parsedynamic: boolean,
     /** 推送时遇到视频动态时解析的画质偏好设置，0 为自动根据「pushMaxAutoVideoSize」大小选择，其他为固定画质，仅「parsedynamic」为 true 时生效
      * - 0: 自动根据大小选择
      * - 6: 240P 极速 (仅MP4格式支持)

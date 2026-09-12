@@ -1,125 +1,137 @@
-import axios from 'node-karin/axios'
+import { Networks } from '@/module'
 
 export interface XiaohongshuIdData {
   type: 'note' | 'unknown'
   [x: string]: any
 }
 
+const isDomainOrSubdomain = (hostname: string, domain: string): boolean => {
+  const normalizedHostname = hostname.toLowerCase()
+  const isValidHostname = normalizedHostname.length <= 253 && normalizedHostname
+    .split('.')
+    .every(label => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
+  return isValidHostname && (
+    normalizedHostname === domain || normalizedHostname.endsWith(`.${domain}`)
+  )
+}
+
+const isAllowedXiaohongshuHostname = (hostname: string): boolean => {
+  return ['xiaohongshu.com', 'xhslink.com', 'xhslink.cn'].some(domain => isDomainOrSubdomain(hostname, domain))
+}
+
+const parseXiaohongshuUrl = (value: string): URL | undefined => {
+  const source = value.trim()
+  if (!source) return undefined
+
+  const candidates = [source]
+  try {
+    const decoded = decodeURIComponent(source)
+    if (decoded !== source) candidates.push(decoded)
+  } catch {
+    // Keep the original input when it contains malformed percent encoding.
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const withProtocol = /^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`
+      const parsed = new URL(withProtocol)
+      if (!['http:', 'https:'].includes(parsed.protocol)) continue
+      if (!isAllowedXiaohongshuHostname(parsed.hostname)) continue
+      return parsed
+    } catch {
+      // Try the decoded candidate, if available.
+    }
+  }
+
+  return undefined
+}
+
+const decodeSafely = (value: string): string => {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+const resolveEffectiveXiaohongshuUrl = (url: URL): URL | undefined => {
+  const redirectPath = url.searchParams.get('redirectPath')
+  if (!redirectPath) return url
+
+  const decodedRedirectPath = decodeSafely(redirectPath)
+  const redirectUrl = decodedRedirectPath.startsWith('/')
+    ? `https://www.xiaohongshu.com${decodedRedirectPath}`
+    : decodedRedirectPath
+  return parseXiaohongshuUrl(redirectUrl)
+}
+
+const pickXsecToken = (url: URL): string | undefined => {
+  const queryToken = url.searchParams.get('xsec_token') || url.searchParams.get('XSEC_TOKEN')
+  if (queryToken) return queryToken
+
+  const hashMatch = /(?:^|[?&#])(?:xsec_token|XSEC_TOKEN)=([^&#]+)/.exec(url.hash)
+  return hashMatch?.[1]
+}
+
+export const parseXiaohongshuLongLink = (longLink: string): XiaohongshuIdData => {
+  const sourceUrl = parseXiaohongshuUrl(longLink)
+  if (!sourceUrl || !isDomainOrSubdomain(sourceUrl.hostname, 'xiaohongshu.com')) {
+    return { type: 'unknown' }
+  }
+
+  const effectiveUrl = resolveEffectiveXiaohongshuUrl(sourceUrl)
+  if (!effectiveUrl || !isDomainOrSubdomain(effectiveUrl.hostname, 'xiaohongshu.com')) {
+    return { type: 'unknown' }
+  }
+
+  const pathMatch = /^\/(?:discovery\/item|explore)\/([0-9a-zA-Z]+)(?:\/|$)/.exec(effectiveUrl.pathname)
+  const targetNoteId = /^\/explore\/?$/.test(effectiveUrl.pathname)
+    ? effectiveUrl.searchParams.get('target_note_id')
+    : undefined
+  const noteId = pathMatch?.[1] || (targetNoteId && /^[0-9a-zA-Z]+$/.test(targetNoteId) ? targetNoteId : undefined)
+  if (!noteId) return { type: 'unknown' }
+
+  return {
+    type: 'note',
+    note_id: noteId,
+    xsec_token: pickXsecToken(effectiveUrl) ?? pickXsecToken(sourceUrl)
+  }
+}
+
+const hasRequiredXsecToken = (result: XiaohongshuIdData): boolean => {
+  return result.type === 'note' && typeof result.xsec_token === 'string' && result.xsec_token.trim().length > 0
+}
+
+const shouldResolveXiaohongshuRedirect = (url: string): boolean => {
+  return Boolean(parseXiaohongshuUrl(url))
+}
+
 /**
  * 解析小红书分享链接，提取作品ID
  * - 典型长链接: https://www.xiaohongshu.com/explore/<note_id>
- * - 短链: https://xhslink.com/<code>、https://xhslink.cn/o/<code>（会重定向到长链接）
+ * - 短链: http(s)://xhslink.com/<code> 或 http(s)://xhslink.cn/<code>（会重定向到长链接）
  */
 export const getXiaohongshuID = async (url: string, log = true): Promise<XiaohongshuIdData> => {
-  const resp = await axios.get(url, {
-    headers: {
-      'User-Agent': 'Apifox/1.0.0 (https://apifox.com)'
-    }
-  })
-  const longLink = resp?.request?.res?.responseUrl ?? url
-  // 安全解码：如果最终地址里包含百分号编码的真实链接，解码后才能命中正则
-  const normalizedLink = (() => {
-    try {
-      return decodeURIComponent(longLink)
-    } catch {
-      return longLink
-    }
-  })()
-
-  const effectiveLink = (() => {
-    try {
-      const u = new URL(normalizedLink)
-      if (u.pathname.startsWith('/404')) {
-        const rp = u.searchParams.get('redirectPath')
-        if (rp) {
-          try {
-            return decodeURIComponent(rp)
-          } catch {
-            return rp
-          }
-        }
-      }
-      const mm = /[?&]redirectPath=([^&#]+)/.exec(normalizedLink)
-      if (mm?.[1]) {
-        try {
-          return decodeURIComponent(mm[1])
-        } catch {
-          return mm[1]
-        }
-      }
-      return normalizedLink
-    } catch {
-      const mm = /[?&]redirectPath=([^&#]+)/.exec(normalizedLink)
-      if (mm?.[1]) {
-        try {
-          return decodeURIComponent(mm[1])
-        } catch {
-          return mm[1]
-        }
-      }
-      return normalizedLink
-    }
-  })()
-
-  // 同时从 effectiveLink 与 normalizedLink 中获取 token，优先使用有效链接
-  const pickToken = (s: string): string | undefined => {
-    try {
-      const u = new URL(s)
-      const t = u.searchParams.get('xsec_token') || u.searchParams.get('XSEC_TOKEN') || undefined
-      if (t) return t
-      if (u.hash) {
-        const mm = /(?:^|[?&#])(?:xsec_token|XSEC_TOKEN)=([^&#]+)/.exec(u.hash)
-        if (mm?.[1]) return mm[1]
-      }
-      return undefined
-    } catch {
-      const mm = /(?:^|[?&#])(?:xsec_token|XSEC_TOKEN)=([^&#]+)/.exec(s)
-      return mm?.[1]
-    }
+  const directResult = parseXiaohongshuLongLink(url)
+  if (hasRequiredXsecToken(directResult)) {
+    return directResult
   }
-  const finalToken = pickToken(effectiveLink) ?? pickToken(normalizedLink)
 
-  let result: XiaohongshuIdData = { type: 'unknown' }
-
-  switch (true) {
-    case /xiaohongshu\.com\/discovery\/item\/([0-9a-zA-Z]+)/.test(effectiveLink): {
-      const m = /xiaohongshu\.com\/discovery\/item\/([0-9a-zA-Z]+)/.exec(effectiveLink)
-      result = {
-        type: 'note',
-        note_id: m ? m[1] : undefined,
-        xsec_token: finalToken
-      }
-      break
-    }
-
-    case /xiaohongshu\.com\/explore\/([0-9a-zA-Z]+)/.test(effectiveLink): {
-      const m = /xiaohongshu\.com\/explore\/([0-9a-zA-Z]+)/.exec(effectiveLink)
-      result = {
-        type: 'note',
-        note_id: m ? m[1] : undefined,
-        xsec_token: finalToken
-      }
-      break
-    }
-    case /[?&]target_note_id=([0-9a-zA-Z]+)/.test(effectiveLink) || /[?&]target_note_id=([0-9a-zA-Z]+)/.test(normalizedLink): {
-      // 笔记暂不可查看等场景会跳到 /explore?...&target_note_id=<note_id>，路径里没有 ID
-      const m = /[?&]target_note_id=([0-9a-zA-Z]+)/.exec(effectiveLink) ?? /[?&]target_note_id=([0-9a-zA-Z]+)/.exec(normalizedLink)
-      result = {
-        type: 'note',
-        note_id: m ? m[1] : undefined,
-        xsec_token: finalToken
-      }
-      break
-    }
-    default:
-      result = { type: 'unknown' }
-      break
-  }
+  const longLink = shouldResolveXiaohongshuRedirect(url)
+    ? await new Networks({
+      url,
+      outboundProfile: 'xiaohongshu-redirect',
+      timeout: 15000
+    }).getLongLink()
+    : url
+  const result = parseXiaohongshuLongLink(longLink)
 
   if (result.type === 'unknown') {
     throw new Error('无法从链接中提取小红书笔记ID')
   }
-
+  if (!hasRequiredXsecToken(result)) {
+    throw new Error('无法从链接中提取有效的小红书 xsec_token')
+  }
   if (log) {
     console.log(result)
   }
