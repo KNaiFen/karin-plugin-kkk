@@ -1,7 +1,8 @@
-import axios from 'node-karin/axios'
-import type { AxiosHeaders, RawAxiosRequestHeaders } from 'node-karin/axios'
-import { wbi_sign } from '@ikenxuan/amagi'
 import crypto from 'node:crypto'
+
+import { wbi_sign } from '@ikenxuan/amagi'
+import type { AxiosHeaders, RawAxiosRequestHeaders } from 'node-karin/axios'
+import axios from 'node-karin/axios'
 
 import { logSummaryMessage } from './progress'
 import type { SummaryMediaReference } from './types'

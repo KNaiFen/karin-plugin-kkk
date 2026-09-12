@@ -3,6 +3,7 @@ import jpeg from 'jpeg-js'
 import jsQR from 'jsqr'
 import { logger } from 'node-karin'
 import { PNG } from 'pngjs'
+
 import { executeSafeAxiosRequest } from './OutboundRequest'
 
 /**

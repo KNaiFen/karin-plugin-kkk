@@ -1,6 +1,6 @@
-import { fetchKuaishouData, getKuaishouID, type ExtendedKuaishouOptionsType } from '@/platform/kuaishou'
-import type { KuaishouDataTypes } from '@/types'
+import { type ExtendedKuaishouOptionsType, fetchKuaishouData, getKuaishouID } from '@/platform/kuaishou'
 import type { ParsedPost } from '@/platform/parsedPost'
+import type { KuaishouDataTypes } from '@/types'
 
 import { buildAuthor, buildParsedPost, buildVideo, normalizeTitle, textBlock, toStats } from '../shared'
 

@@ -7,9 +7,8 @@ import {
   buildDouyinWorkCandidateUrls,
   buildDouyinWorkResultFromHtmlWork,
   DOUYIN_ANTI_BOT_HTML_PATTERN,
-  parseDouyinHtmlWork,
-  type DouyinHtmlWork
-} from '@/platform/douyin/html'
+  type DouyinHtmlWork,
+  parseDouyinHtmlWork } from '@/platform/douyin/html'
 
 import {
   closeBrowserSafely,

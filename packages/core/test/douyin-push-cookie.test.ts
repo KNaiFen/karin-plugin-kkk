@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { resetGuestCookieRecoveryState } from '../src/module/utils/GuestCookieRecovery'
 import {
   assertSuccessfulDouyinPushResult,
   prepareDouyinPushCookie,
@@ -7,7 +8,6 @@ import {
   shouldFallbackDouyinUserPageAfterError,
   shouldRefreshDouyinCookieAfterError
 } from '../src/platform/douyin/push/cookie'
-import { resetGuestCookieRecoveryState } from '../src/module/utils/GuestCookieRecovery'
 
 describe('Douyin push cookie handling', () => {
   it('refreshes and retries once when Douyin reports an invalid cookie response', async () => {

@@ -1,6 +1,6 @@
 import type { DouyinWorkResult } from '@/module/utils'
-import type { ParsedPost } from '@/platform/parsedPost'
 import type { getDouyinID } from '@/platform/douyin/getID'
+import type { ParsedPost } from '@/platform/parsedPost'
 
 type DouyinIdData = Awaited<ReturnType<typeof getDouyinID>>
 

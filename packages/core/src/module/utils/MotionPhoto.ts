@@ -10,10 +10,9 @@ import { Common } from './Common'
 import { Config } from './Config'
 import {
   buildDerivedCacheIdentity,
+  type CacheIdentity,
   resolveDerivedArtifact,
-  resolveFileCacheIdentity,
-  type CacheIdentity
-} from './derivedCache'
+  resolveFileCacheIdentity } from './derivedCache'
 
 const xmpHeaderBuffer = Buffer.from('http://ns.adobe.com/xap/1.0/\u0000', 'utf8')
 const oppoExifHex = 'FFE100724578696600004D4D002A0000000800040100000400000001000005A001010004000000010000043C87690004000000010000003E011200030000000100000000000000000002928600020000000E0000005C920800040000000100000000000000006F706C75735F3833383836303800'

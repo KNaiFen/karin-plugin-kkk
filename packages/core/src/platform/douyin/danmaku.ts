@@ -10,11 +10,11 @@ import { ffmpeg, ffprobe, logger } from 'node-karin'
 import {
   buildBitrateLimitArgs,
   buildDerivedCacheIdentity,
+  type CacheIdentity,
   Common,
   resolveDerivedArtifact,
   resolveFileCacheIdentity,
   resolveVideoEncodeArgs,
-  type CacheIdentity,
   type VideoEncodePreset
 } from '@/module/utils'
 

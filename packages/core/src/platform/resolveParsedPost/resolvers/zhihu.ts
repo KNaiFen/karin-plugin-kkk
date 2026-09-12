@@ -1,8 +1,8 @@
 import { baseHeaders } from '@/module'
 import { Config } from '@/module/utils/Config'
+import type { ParsedPost } from '@/platform/parsedPost'
 import { getZhihuID } from '@/platform/zhihu'
 import { fetchZhihuDetail } from '@/platform/zhihu/api'
-import type { ParsedPost } from '@/platform/parsedPost'
 
 import { buildAuthor, buildParsedPost, createHeaders, toMeta, toStats } from '../shared'
 
@@ -33,13 +33,13 @@ export const resolveZhihuParsedPost = async (url: string): Promise<ParsedPost> =
     url: detail.url,
     contentBlocks: isArticle
       ? [{
-          type: 'html',
-          html: detail.article.content
-        }]
+        type: 'html',
+        html: detail.article.content
+      }]
       : [{
-          type: 'html',
-          html: detail.answer.content
-        }],
+        type: 'html',
+        html: detail.answer.content
+      }],
     images: detail.richContent.images.map(url => ({ url })),
     videos,
     primaryVideo: videos[0],

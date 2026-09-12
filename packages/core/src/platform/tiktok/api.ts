@@ -3,13 +3,13 @@ import { randomBytes } from 'node:crypto'
 import { logger } from 'node-karin'
 import axios from 'node-karin/axios'
 
-import { buildConfiguredRequestOptions } from '@/module/utils/RequestConfig'
 import { Config } from '@/module/utils/Config'
 import { retryWithGuestCookieRecovery } from '@/module/utils/GuestCookieRecovery'
 import {
   executeSafeAxiosRequest,
   isTrustedTikTokUrl
 } from '@/module/utils/OutboundRequest'
+import { buildConfiguredRequestOptions } from '@/module/utils/RequestConfig'
 
 import { applyTikTokProxyAgent } from './proxy'
 import { TikTokXBogus } from './xBogus'
@@ -395,10 +395,10 @@ const fetchTikTokItemFromHtmlWithCookie = async (
   })
   const nextCookie = isTrustedTikTokUrl(finalUrl)
     ? mergeTikTokCookieHeaders({
-        configuredCookie: cookie,
-        pageCookie: extractTikTokCookieFromSetCookie(response.headers?.['set-cookie']),
-        responseMsToken: response.headers?.['x-ms-token']
-      })
+      configuredCookie: cookie,
+      pageCookie: extractTikTokCookieFromSetCookie(response.headers?.['set-cookie']),
+      responseMsToken: response.headers?.['x-ms-token']
+    })
     : cookie
   const item = typeof response.data === 'string' ? extractTikTokItemFromHtml(response.data) : null
   if (!item) {

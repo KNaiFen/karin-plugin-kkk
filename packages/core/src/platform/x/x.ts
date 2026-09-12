@@ -6,13 +6,15 @@ import {
   buildConfiguredRequestOptions,
   createPlainVideoTitleContext,
   downloadVideo,
-  replyPlainVideoTitle,
-  type PlainVideoTitleContext
-} from '@/module'
+  type PlainVideoTitleContext,
+  replyPlainVideoTitle } from '@/module'
 import { resolveParsedPostWithCache } from '@/module/summaryParse/parsedPostCache'
 import { Config } from '@/module/utils/Config'
 import { replyAndRecordLongTaskCompletionAnchor } from '@/module/utils/LongTaskCompletionNotify'
 
+import {
+  renderExternalPostCard
+} from '../externalPostCard'
 import {
   buildExternalPostCardFromParsedPost,
   buildParsedPostImageReplyElements,
@@ -20,9 +22,6 @@ import {
   buildParsedPostVideoDownloadEntries
 } from '../parsedPostAdapters'
 import { prepareParsedPostForCardRender } from '../parsedPostAssets'
-import {
-  renderExternalPostCard
-} from '../externalPostCard'
 import { buildXNetworkOptions } from './request'
 import type { XIdData } from './types'
 

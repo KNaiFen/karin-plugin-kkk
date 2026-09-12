@@ -26,14 +26,14 @@ describe('external post render build pipeline', () => {
   it('copies the built template css into core lib output', () => {
     const source = readFileSync(copyAssetsPluginPath, 'utf-8')
 
-    expect(source).toContain("const cssSourceFile = resolve(rootDir, '../template/dist/main.css')")
-    expect(source).toContain("const cssTargetFile = resolve(rootDir, 'lib/karin-plugin-kkk.css')")
+    expect(source).toContain('const cssSourceFile = resolve(rootDir, \'../template/dist/main.css\')')
+    expect(source).toContain('const cssTargetFile = resolve(rootDir, \'lib/karin-plugin-kkk.css\')')
     expect(source).toContain('CSS文件已复制到:')
   })
 
   it('bundles the local amagi runtime instead of leaving it as a production external', () => {
     const source = readFileSync(viteConfigPath, 'utf-8')
 
-    expect(source).not.toContain("'@ikenxuan/amagi'")
+    expect(source).not.toContain('\'@ikenxuan/amagi\'')
   })
 })

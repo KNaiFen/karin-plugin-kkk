@@ -1,6 +1,6 @@
 import type { ExternalPostCardData } from '@/platform/externalPostCard'
-import { buildSummaryInputFromParsedPost } from '@/platform/parsedPostAdapters'
 import type { ParsedPost } from '@/platform/parsedPost'
+import { buildSummaryInputFromParsedPost } from '@/platform/parsedPostAdapters'
 
 import type {
   SummaryBuildSource,

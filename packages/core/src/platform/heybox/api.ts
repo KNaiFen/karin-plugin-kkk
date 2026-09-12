@@ -1,13 +1,13 @@
 import axios from 'node-karin/axios'
 
-import { buildConfiguredRequestOptions } from '@/module/utils/RequestConfig'
 import { Config } from '@/module/utils/Config'
 import { retryWithGuestCookieRecovery } from '@/module/utils/GuestCookieRecovery'
+import { buildConfiguredRequestOptions } from '@/module/utils/RequestConfig'
 
 import { buildHeyboxUrl } from './encrypt'
 import type {
-  HeyboxApiCommentItem,
   HeyboxApiCommentData,
+  HeyboxApiCommentItem,
   HeyboxApiImage,
   HeyboxApiLink,
   HeyboxApiResponse,

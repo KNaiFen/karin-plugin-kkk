@@ -5,25 +5,22 @@ import { logger as karinLogger, mkdirSync } from 'node-karin'
 import axios from 'node-karin/axios'
 import { karinPathBase } from 'node-karin/root'
 
+import { Root } from '../../root'
 import type { guestCookieConfig, guestCookiePlatformConfig } from '../../types/config/guestCookie'
-
-import {
-  GuestCookieAuditLogger,
-  summarizeCookieHeader,
-  type GuestCookieAuditEvent
-} from './GuestCookieAuditLogger'
 import {
   applyBrowserProxyToLaunchOptions,
   closeBrowserSafely,
   configureRequestBlocking,
   createInjectedPage,
-  getBrowserProxyCredentials,
-  getBrowserLaunchOptions
-} from './BrowserRuntime'
+  getBrowserLaunchOptions,
+  getBrowserProxyCredentials } from './BrowserRuntime'
 import { Config } from './Config'
+import {
+  type GuestCookieAuditEvent,
+  GuestCookieAuditLogger,
+  summarizeCookieHeader } from './GuestCookieAuditLogger'
 import { baseHeaders } from './Networks'
 import { buildConfiguredRequestOptions } from './RequestConfig'
-import { Root } from '../../root'
 
 export type { GuestCookieAuditEvent } from './GuestCookieAuditLogger'
 

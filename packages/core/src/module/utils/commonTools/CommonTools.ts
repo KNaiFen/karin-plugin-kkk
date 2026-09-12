@@ -13,8 +13,8 @@ import {
 import { getReplyMessage } from './replyMessage'
 import { createTempDirectories, type TempDirectories } from './tempDirectories'
 import { useDarkTheme } from './theme'
+import { type VideoPreviewInfo, VideoPreviewStore } from './videoPreviewState'
 import { validateVideoRequest } from './videoRequest'
-import { VideoPreviewStore, type VideoPreviewInfo } from './videoPreviewState'
 
 /** 常用工具合集 */
 class CommonTools {

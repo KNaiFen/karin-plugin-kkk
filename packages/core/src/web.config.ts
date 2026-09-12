@@ -100,389 +100,389 @@ const createSummaryParseAccordion = (all: ConfigType) => {
         className: 'ml-4 mr-4',
         subtitle: '解析链接后调用 OpenAI Responses 生成总结的专用设置',
         children: [
-        components.divider.create('divider-summary-parse', {
-          description: '解析总结配置',
-          descPosition: 20
-        }),
-        components.switch.create('summaryParse:switch', {
-          label: '启用解析总结',
-          description: '命中 `#关键词 ` 开头的消息后，先解析链接内容，再调用 OpenAI Responses 生成总结',
-          defaultSelected: config?.switch ?? false
-        }),
-        components.input.group('summaryParse:keywords', {
-          label: '触发关键词',
-          maxRows: 2,
-          itemsPerRow: 4,
-          data: config?.keywords ?? [],
-          description: '不带前导 `#`；例如配置 `总结` 后，使用 `#总结 待解析内容`',
-          template: components.input.string('summaryParse:keywords:item', {
-            placeholder: '例如：总结',
-            label: '',
-            color: 'warning'
+          components.divider.create('divider-summary-parse', {
+            description: '解析总结配置',
+            descPosition: 20
+          }),
+          components.switch.create('summaryParse:switch', {
+            label: '启用解析总结',
+            description: '命中 `#关键词 ` 开头的消息后，先解析链接内容，再调用 OpenAI Responses 生成总结',
+            defaultSelected: config?.switch ?? false
+          }),
+          components.input.group('summaryParse:keywords', {
+            label: '触发关键词',
+            maxRows: 2,
+            itemsPerRow: 4,
+            data: config?.keywords ?? [],
+            description: '不带前导 `#`；例如配置 `总结` 后，使用 `#总结 待解析内容`',
+            template: components.input.string('summaryParse:keywords:item', {
+              placeholder: '例如：总结',
+              label: '',
+              color: 'warning'
+            })
+          }),
+          components.switch.create('summaryParse:sendParsedContent', {
+            label: '继续发送原解析内容',
+            description: '生成总结后，是否继续按原平台配置发送解析图文/视频等内容',
+            defaultSelected: config?.sendParsedContent ?? false,
+            isDisabled: !switchEnabled
+          }),
+          components.divider.create('divider-summary-parse-prompt-note', {
+            description: '提示词为插件内置固定内容，并会根据本次实际输入是否包含图片/视频抽帧，以及是否启用联网搜索，自动切换对应版本',
+            descPosition: 20
+          }),
+          components.input.string('summaryParse:llm:baseUrl', {
+            label: 'Responses Base URL',
+            type: 'text',
+            description: 'OpenAI Responses API 接口基础地址',
+            defaultValue: config?.llm?.baseUrl || '',
+            placeholder: 'https://api.openai.com/v1',
+            isRequired: false,
+            isDisabled: !switchEnabled
+          }),
+          components.input.string('summaryParse:llm:apiKey', {
+            label: 'Responses API Key',
+            type: 'password',
+            description: 'OpenAI Responses API 接口密钥',
+            defaultValue: config?.llm?.apiKey || '',
+            placeholder: '',
+            isRequired: false,
+            isDisabled: !switchEnabled
+          }),
+          components.input.string('summaryParse:llm:model', {
+            label: 'Responses Model',
+            type: 'text',
+            description: 'OpenAI Responses API 模型名',
+            defaultValue: config?.llm?.model || '',
+            placeholder: 'gpt-4o-mini',
+            isRequired: false,
+            isDisabled: !switchEnabled
+          }),
+          components.input.number('summaryParse:llm:timeoutMs', {
+            label: 'Responses 超时',
+            description: '单位：毫秒',
+            defaultValue: String(config?.llm?.timeoutMs ?? 60000),
+            rules: [
+              {
+                min: 1000,
+                max: 300000,
+                error: '请输入一个范围在 1000 到 300000 之间的数字'
+              }
+            ],
+            isDisabled: !switchEnabled
+          }),
+          components.input.number('summaryParse:llm:retryCount', {
+            label: 'Responses 重试次数',
+            description: '仅对超时、断连等瞬时失败生效；0 表示不重试',
+            defaultValue: String(config?.llm?.retryCount ?? 1),
+            rules: [
+              {
+                min: 0,
+                max: 10,
+                error: '请输入一个范围在 0 到 10 之间的数字'
+              }
+            ],
+            isDisabled: !switchEnabled
+          }),
+          components.input.number('summaryParse:llm:retryDelayMs', {
+            label: 'Responses 重试间隔',
+            description: '单位：毫秒，失败后等待多久再发起下一次尝试',
+            defaultValue: String(config?.llm?.retryDelayMs ?? 1500),
+            rules: [
+              {
+                min: 0,
+                max: 60000,
+                error: '请输入一个范围在 0 到 60000 之间的数字'
+              }
+            ],
+            isDisabled: !switchEnabled
+          }),
+          components.switch.create('summaryParse:llm:webSearchEnabled', {
+            label: '启用联网搜索',
+            description: '使用 OpenAI Responses 的 web_search 工具获取外部资料',
+            defaultSelected: config?.llm?.webSearchEnabled ?? false,
+            isDisabled: !switchEnabled
+          }),
+          components.switch.create('summaryParse:llm:reasoningEnabled', {
+            label: '启用深度思考',
+            description: '为支持的 Responses 模型显式设置 reasoning 参数',
+            defaultSelected: config?.llm?.reasoningEnabled ?? true,
+            isDisabled: !switchEnabled
+          }),
+          components.radio.group('summaryParse:llm:reasoningEffort', {
+            label: '思考强度',
+            description: 'OpenAI Responses reasoning.effort 参数',
+            orientation: 'horizontal',
+            defaultValue: config?.llm?.reasoningEffort || 'high',
+            radio: [
+              components.radio.create('summaryParse:llm:reasoningEffort-minimal', {
+                label: 'Minimal',
+                value: 'minimal'
+              }),
+              components.radio.create('summaryParse:llm:reasoningEffort-low', {
+                label: 'Low',
+                value: 'low'
+              }),
+              components.radio.create('summaryParse:llm:reasoningEffort-medium', {
+                label: 'Medium',
+                value: 'medium'
+              }),
+              components.radio.create('summaryParse:llm:reasoningEffort-high', {
+                label: 'High',
+                value: 'high'
+              }),
+              components.radio.create('summaryParse:llm:reasoningEffort-xhigh', {
+                label: 'XHigh',
+                value: 'xhigh'
+              })
+            ],
+            isDisabled: !switchEnabled || !reasoningEnabled
+          }),
+          components.radio.group('summaryParse:asr:mode', {
+            label: 'ASR 优先模式',
+            description: '平台字幕不可用时，优先尝试云端还是本地 ASR',
+            orientation: 'horizontal',
+            defaultValue: config?.asr?.mode || 'cloud',
+            radio: [
+              components.radio.create('summaryParse:asr:mode-cloud', {
+                label: '云端优先',
+                value: 'cloud'
+              }),
+              components.radio.create('summaryParse:asr:mode-local', {
+                label: '本地优先',
+                value: 'local'
+              })
+            ],
+            isDisabled: !switchEnabled
+          }),
+          components.input.string('summaryParse:asr:whisperCppPath', {
+            label: 'whisper.cpp 路径',
+            type: 'text',
+            description: '本地 whisper.cpp CLI 可执行文件路径',
+            defaultValue: config?.asr?.whisperCppPath || '',
+            placeholder: 'whisper-cli',
+            isRequired: false,
+            isDisabled: !switchEnabled
+          }),
+          components.input.string('summaryParse:asr:modelPath', {
+            label: 'whisper.cpp 模型路径',
+            type: 'text',
+            description: 'whisper.cpp 使用的模型文件路径',
+            defaultValue: all.app.summaryParse?.asr?.modelPath || '',
+            placeholder: '/models/ggml-base.bin',
+            isRequired: false,
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.string('summaryParse:asr:language', {
+            label: 'ASR 语言',
+            type: 'text',
+            description: '例如 zh、en、ja',
+            defaultValue: all.app.summaryParse?.asr?.language || 'zh',
+            placeholder: 'zh',
+            isRequired: false,
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.number('summaryParse:asr:threads', {
+            label: 'ASR 线程数',
+            description: '调用 whisper.cpp 时使用的线程数',
+            defaultValue: String(all.app.summaryParse?.asr?.threads ?? 4),
+            rules: [
+              {
+                min: 1,
+                max: 128,
+                error: '请输入一个范围在 1 到 128 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.string('summaryParse:asr:ffmpegPath', {
+            label: 'ffmpeg 路径',
+            type: 'text',
+            description: '用于从视频抽取音频的 ffmpeg 可执行文件路径',
+            defaultValue: all.app.summaryParse?.asr?.ffmpegPath || '',
+            placeholder: 'ffmpeg',
+            isRequired: false,
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.number('summaryParse:asr:audioBitrateKbps', {
+            label: '抽音码率',
+            description: '单位：kbps，用于控制送 ASR 的音频体积',
+            defaultValue: String(all.app.summaryParse?.asr?.audioBitrateKbps ?? 24),
+            rules: [
+              {
+                min: 8,
+                max: 320,
+                error: '请输入一个范围在 8 到 320 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.number('summaryParse:asr:maxSegmentMinutes', {
+            label: '最长切片时长',
+            description: '单位：分钟，超出时会自动按段切分后再转写',
+            defaultValue: String(all.app.summaryParse?.asr?.maxSegmentMinutes ?? 30),
+            rules: [
+              {
+                min: 1,
+                max: 60,
+                error: '请输入一个范围在 1 到 60 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.string('summaryParse:asr:cloud:baseUrl', {
+            label: '云端 ASR Base URL',
+            type: 'text',
+            description: 'OpenAI-compatible 音频转写接口基础地址',
+            defaultValue: all.app.summaryParse?.asr?.cloud?.baseUrl || '',
+            placeholder: 'https://api.siliconflow.cn/v1',
+            isRequired: false,
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.string('summaryParse:asr:cloud:apiKey', {
+            label: '云端 ASR API Key',
+            type: 'password',
+            description: '云端音频转写接口密钥',
+            defaultValue: all.app.summaryParse?.asr?.cloud?.apiKey || '',
+            placeholder: '',
+            isRequired: false,
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.string('summaryParse:asr:cloud:model', {
+            label: '云端 ASR Model',
+            type: 'text',
+            description: '云端音频转写模型名',
+            defaultValue: all.app.summaryParse?.asr?.cloud?.model || '',
+            placeholder: 'FunAudioLLM/SenseVoiceSmall',
+            isRequired: false,
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.number('summaryParse:asr:cloud:timeoutMs', {
+            label: '云端 ASR 超时',
+            description: '单位：毫秒',
+            defaultValue: String(all.app.summaryParse?.asr?.cloud?.timeoutMs ?? 45000),
+            rules: [
+              {
+                min: 1000,
+                max: 300000,
+                error: '请输入一个范围在 1000 到 300000 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.number('summaryParse:asr:cloud:retryCount', {
+            label: '云端 ASR 重试次数',
+            description: '仅对云端音频转写的超时、断连等瞬时失败生效；0 表示不重试',
+            defaultValue: String(all.app.summaryParse?.asr?.cloud?.retryCount ?? 1),
+            rules: [
+              {
+                min: 0,
+                max: 10,
+                error: '请输入一个范围在 0 到 10 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.input.number('summaryParse:asr:cloud:retryDelayMs', {
+            label: '云端 ASR 重试间隔',
+            description: '单位：毫秒，失败后等待多久再发起下一次云端转写',
+            defaultValue: String(all.app.summaryParse?.asr?.cloud?.retryDelayMs ?? 1500),
+            rules: [
+              {
+                min: 0,
+                max: 60000,
+                error: '请输入一个范围在 0 到 60000 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.divider.create('divider-summary-parse-video-frames', {
+            description: '视频抽帧配置',
+            descPosition: 20
+          }),
+          components.switch.create('summaryParse:asr:videoFrames:enabled', {
+            label: '启用视频抽帧',
+            description: '从视频中按时间间隔导出画面，并作为多模态图片一起发给 LLM',
+            defaultSelected: all.app.summaryParse?.asr?.videoFrames?.enabled ?? false,
+            isDisabled: !(all.app.summaryParse?.switch ?? false)
+          }),
+          components.radio.group('summaryParse:asr:videoFrames:sourceMode', {
+            label: '抽帧视频源',
+            description: '自动：开启“继续发送原解析内容”时用正常解析质量，否则优先最小体积视频源',
+            orientation: 'horizontal',
+            defaultValue: all.app.summaryParse?.asr?.videoFrames?.sourceMode || 'auto',
+            radio: [
+              components.radio.create('summaryParse:asr:videoFrames:sourceMode-auto', {
+                label: '自动',
+                value: 'auto'
+              }),
+              components.radio.create('summaryParse:asr:videoFrames:sourceMode-summary-optimized', {
+                label: '最小体积',
+                value: 'summary_optimized'
+              }),
+              components.radio.create('summaryParse:asr:videoFrames:sourceMode-parsed-content', {
+                label: '正常解析质量',
+                value: 'parsed_content'
+              })
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
+          }),
+          components.input.number('summaryParse:asr:videoFrames:minIntervalSeconds', {
+            label: '最低抽图间隔',
+            description: '单位：秒；短视频按该间隔抽图，长视频会自动拉大间隔以满足最大数量限制',
+            defaultValue: String(all.app.summaryParse?.asr?.videoFrames?.minIntervalSeconds ?? 30),
+            rules: [
+              {
+                min: 1,
+                max: 3600,
+                error: '请输入一个范围在 1 到 3600 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
+          }),
+          components.input.number('summaryParse:asr:videoFrames:maxImages', {
+            label: '最大抽图数量',
+            description: '长视频达到上限后会自动增大抽图间隔',
+            defaultValue: String(all.app.summaryParse?.asr?.videoFrames?.maxImages ?? 6),
+            rules: [
+              {
+                min: 1,
+                max: 60,
+                error: '请输入一个范围在 1 到 60 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
+          }),
+          components.input.number('summaryParse:asr:videoFrames:skipStartSeconds', {
+            label: '跳过片头秒数',
+            description: '抽图时避开视频开头若干秒，减少片头空镜或片头 logo 干扰',
+            defaultValue: String(all.app.summaryParse?.asr?.videoFrames?.skipStartSeconds ?? 3),
+            rules: [
+              {
+                min: 0,
+                max: 600,
+                error: '请输入一个范围在 0 到 600 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
+          }),
+          components.input.number('summaryParse:asr:videoFrames:skipEndSeconds', {
+            label: '跳过片尾秒数',
+            description: '抽图时避开视频结尾若干秒，减少片尾字幕、黑场或结束页干扰',
+            defaultValue: String(all.app.summaryParse?.asr?.videoFrames?.skipEndSeconds ?? 3),
+            rules: [
+              {
+                min: 0,
+                max: 600,
+                error: '请输入一个范围在 0 到 600 之间的数字'
+              }
+            ],
+            isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
           })
-        }),
-        components.switch.create('summaryParse:sendParsedContent', {
-          label: '继续发送原解析内容',
-          description: '生成总结后，是否继续按原平台配置发送解析图文/视频等内容',
-          defaultSelected: config?.sendParsedContent ?? false,
-          isDisabled: !switchEnabled
-        }),
-        components.divider.create('divider-summary-parse-prompt-note', {
-          description: '提示词为插件内置固定内容，并会根据本次实际输入是否包含图片/视频抽帧，以及是否启用联网搜索，自动切换对应版本',
-          descPosition: 20
-        }),
-        components.input.string('summaryParse:llm:baseUrl', {
-          label: 'Responses Base URL',
-          type: 'text',
-          description: 'OpenAI Responses API 接口基础地址',
-          defaultValue: config?.llm?.baseUrl || '',
-          placeholder: 'https://api.openai.com/v1',
-          isRequired: false,
-          isDisabled: !switchEnabled
-        }),
-        components.input.string('summaryParse:llm:apiKey', {
-          label: 'Responses API Key',
-          type: 'password',
-          description: 'OpenAI Responses API 接口密钥',
-          defaultValue: config?.llm?.apiKey || '',
-          placeholder: '',
-          isRequired: false,
-          isDisabled: !switchEnabled
-        }),
-        components.input.string('summaryParse:llm:model', {
-          label: 'Responses Model',
-          type: 'text',
-          description: 'OpenAI Responses API 模型名',
-          defaultValue: config?.llm?.model || '',
-          placeholder: 'gpt-4o-mini',
-          isRequired: false,
-          isDisabled: !switchEnabled
-        }),
-        components.input.number('summaryParse:llm:timeoutMs', {
-          label: 'Responses 超时',
-          description: '单位：毫秒',
-          defaultValue: String(config?.llm?.timeoutMs ?? 60000),
-          rules: [
-            {
-              min: 1000,
-              max: 300000,
-              error: '请输入一个范围在 1000 到 300000 之间的数字'
-            }
-          ],
-          isDisabled: !switchEnabled
-        }),
-        components.input.number('summaryParse:llm:retryCount', {
-          label: 'Responses 重试次数',
-          description: '仅对超时、断连等瞬时失败生效；0 表示不重试',
-          defaultValue: String(config?.llm?.retryCount ?? 1),
-          rules: [
-            {
-              min: 0,
-              max: 10,
-              error: '请输入一个范围在 0 到 10 之间的数字'
-            }
-          ],
-          isDisabled: !switchEnabled
-        }),
-        components.input.number('summaryParse:llm:retryDelayMs', {
-          label: 'Responses 重试间隔',
-          description: '单位：毫秒，失败后等待多久再发起下一次尝试',
-          defaultValue: String(config?.llm?.retryDelayMs ?? 1500),
-          rules: [
-            {
-              min: 0,
-              max: 60000,
-              error: '请输入一个范围在 0 到 60000 之间的数字'
-            }
-          ],
-          isDisabled: !switchEnabled
-        }),
-        components.switch.create('summaryParse:llm:webSearchEnabled', {
-          label: '启用联网搜索',
-          description: '使用 OpenAI Responses 的 web_search 工具获取外部资料',
-          defaultSelected: config?.llm?.webSearchEnabled ?? false,
-          isDisabled: !switchEnabled
-        }),
-        components.switch.create('summaryParse:llm:reasoningEnabled', {
-          label: '启用深度思考',
-          description: '为支持的 Responses 模型显式设置 reasoning 参数',
-          defaultSelected: config?.llm?.reasoningEnabled ?? true,
-          isDisabled: !switchEnabled
-        }),
-        components.radio.group('summaryParse:llm:reasoningEffort', {
-          label: '思考强度',
-          description: 'OpenAI Responses reasoning.effort 参数',
-          orientation: 'horizontal',
-          defaultValue: config?.llm?.reasoningEffort || 'high',
-          radio: [
-            components.radio.create('summaryParse:llm:reasoningEffort-minimal', {
-              label: 'Minimal',
-              value: 'minimal'
-            }),
-            components.radio.create('summaryParse:llm:reasoningEffort-low', {
-              label: 'Low',
-              value: 'low'
-            }),
-            components.radio.create('summaryParse:llm:reasoningEffort-medium', {
-              label: 'Medium',
-              value: 'medium'
-            }),
-            components.radio.create('summaryParse:llm:reasoningEffort-high', {
-              label: 'High',
-              value: 'high'
-            }),
-            components.radio.create('summaryParse:llm:reasoningEffort-xhigh', {
-              label: 'XHigh',
-              value: 'xhigh'
-            })
-          ],
-          isDisabled: !switchEnabled || !reasoningEnabled
-        }),
-        components.radio.group('summaryParse:asr:mode', {
-          label: 'ASR 优先模式',
-          description: '平台字幕不可用时，优先尝试云端还是本地 ASR',
-          orientation: 'horizontal',
-          defaultValue: config?.asr?.mode || 'cloud',
-          radio: [
-            components.radio.create('summaryParse:asr:mode-cloud', {
-              label: '云端优先',
-              value: 'cloud'
-            }),
-            components.radio.create('summaryParse:asr:mode-local', {
-              label: '本地优先',
-              value: 'local'
-            })
-          ],
-          isDisabled: !switchEnabled
-        }),
-        components.input.string('summaryParse:asr:whisperCppPath', {
-          label: 'whisper.cpp 路径',
-          type: 'text',
-          description: '本地 whisper.cpp CLI 可执行文件路径',
-          defaultValue: config?.asr?.whisperCppPath || '',
-          placeholder: 'whisper-cli',
-          isRequired: false,
-          isDisabled: !switchEnabled
-        }),
-        components.input.string('summaryParse:asr:modelPath', {
-          label: 'whisper.cpp 模型路径',
-          type: 'text',
-          description: 'whisper.cpp 使用的模型文件路径',
-          defaultValue: all.app.summaryParse?.asr?.modelPath || '',
-          placeholder: '/models/ggml-base.bin',
-          isRequired: false,
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.string('summaryParse:asr:language', {
-          label: 'ASR 语言',
-          type: 'text',
-          description: '例如 zh、en、ja',
-          defaultValue: all.app.summaryParse?.asr?.language || 'zh',
-          placeholder: 'zh',
-          isRequired: false,
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.number('summaryParse:asr:threads', {
-          label: 'ASR 线程数',
-          description: '调用 whisper.cpp 时使用的线程数',
-          defaultValue: String(all.app.summaryParse?.asr?.threads ?? 4),
-          rules: [
-            {
-              min: 1,
-              max: 128,
-              error: '请输入一个范围在 1 到 128 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.string('summaryParse:asr:ffmpegPath', {
-          label: 'ffmpeg 路径',
-          type: 'text',
-          description: '用于从视频抽取音频的 ffmpeg 可执行文件路径',
-          defaultValue: all.app.summaryParse?.asr?.ffmpegPath || '',
-          placeholder: 'ffmpeg',
-          isRequired: false,
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.number('summaryParse:asr:audioBitrateKbps', {
-          label: '抽音码率',
-          description: '单位：kbps，用于控制送 ASR 的音频体积',
-          defaultValue: String(all.app.summaryParse?.asr?.audioBitrateKbps ?? 24),
-          rules: [
-            {
-              min: 8,
-              max: 320,
-              error: '请输入一个范围在 8 到 320 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.number('summaryParse:asr:maxSegmentMinutes', {
-          label: '最长切片时长',
-          description: '单位：分钟，超出时会自动按段切分后再转写',
-          defaultValue: String(all.app.summaryParse?.asr?.maxSegmentMinutes ?? 30),
-          rules: [
-            {
-              min: 1,
-              max: 60,
-              error: '请输入一个范围在 1 到 60 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.string('summaryParse:asr:cloud:baseUrl', {
-          label: '云端 ASR Base URL',
-          type: 'text',
-          description: 'OpenAI-compatible 音频转写接口基础地址',
-          defaultValue: all.app.summaryParse?.asr?.cloud?.baseUrl || '',
-          placeholder: 'https://api.siliconflow.cn/v1',
-          isRequired: false,
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.string('summaryParse:asr:cloud:apiKey', {
-          label: '云端 ASR API Key',
-          type: 'password',
-          description: '云端音频转写接口密钥',
-          defaultValue: all.app.summaryParse?.asr?.cloud?.apiKey || '',
-          placeholder: '',
-          isRequired: false,
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.string('summaryParse:asr:cloud:model', {
-          label: '云端 ASR Model',
-          type: 'text',
-          description: '云端音频转写模型名',
-          defaultValue: all.app.summaryParse?.asr?.cloud?.model || '',
-          placeholder: 'FunAudioLLM/SenseVoiceSmall',
-          isRequired: false,
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.number('summaryParse:asr:cloud:timeoutMs', {
-          label: '云端 ASR 超时',
-          description: '单位：毫秒',
-          defaultValue: String(all.app.summaryParse?.asr?.cloud?.timeoutMs ?? 45000),
-          rules: [
-            {
-              min: 1000,
-              max: 300000,
-              error: '请输入一个范围在 1000 到 300000 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.number('summaryParse:asr:cloud:retryCount', {
-          label: '云端 ASR 重试次数',
-          description: '仅对云端音频转写的超时、断连等瞬时失败生效；0 表示不重试',
-          defaultValue: String(all.app.summaryParse?.asr?.cloud?.retryCount ?? 1),
-          rules: [
-            {
-              min: 0,
-              max: 10,
-              error: '请输入一个范围在 0 到 10 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.input.number('summaryParse:asr:cloud:retryDelayMs', {
-          label: '云端 ASR 重试间隔',
-          description: '单位：毫秒，失败后等待多久再发起下一次云端转写',
-          defaultValue: String(all.app.summaryParse?.asr?.cloud?.retryDelayMs ?? 1500),
-          rules: [
-            {
-              min: 0,
-              max: 60000,
-              error: '请输入一个范围在 0 到 60000 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.divider.create('divider-summary-parse-video-frames', {
-          description: '视频抽帧配置',
-          descPosition: 20
-        }),
-        components.switch.create('summaryParse:asr:videoFrames:enabled', {
-          label: '启用视频抽帧',
-          description: '从视频中按时间间隔导出画面，并作为多模态图片一起发给 LLM',
-          defaultSelected: all.app.summaryParse?.asr?.videoFrames?.enabled ?? false,
-          isDisabled: !(all.app.summaryParse?.switch ?? false)
-        }),
-        components.radio.group('summaryParse:asr:videoFrames:sourceMode', {
-          label: '抽帧视频源',
-          description: '自动：开启“继续发送原解析内容”时用正常解析质量，否则优先最小体积视频源',
-          orientation: 'horizontal',
-          defaultValue: all.app.summaryParse?.asr?.videoFrames?.sourceMode || 'auto',
-          radio: [
-            components.radio.create('summaryParse:asr:videoFrames:sourceMode-auto', {
-              label: '自动',
-              value: 'auto'
-            }),
-            components.radio.create('summaryParse:asr:videoFrames:sourceMode-summary-optimized', {
-              label: '最小体积',
-              value: 'summary_optimized'
-            }),
-            components.radio.create('summaryParse:asr:videoFrames:sourceMode-parsed-content', {
-              label: '正常解析质量',
-              value: 'parsed_content'
-            })
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
-        }),
-        components.input.number('summaryParse:asr:videoFrames:minIntervalSeconds', {
-          label: '最低抽图间隔',
-          description: '单位：秒；短视频按该间隔抽图，长视频会自动拉大间隔以满足最大数量限制',
-          defaultValue: String(all.app.summaryParse?.asr?.videoFrames?.minIntervalSeconds ?? 30),
-          rules: [
-            {
-              min: 1,
-              max: 3600,
-              error: '请输入一个范围在 1 到 3600 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
-        }),
-        components.input.number('summaryParse:asr:videoFrames:maxImages', {
-          label: '最大抽图数量',
-          description: '长视频达到上限后会自动增大抽图间隔',
-          defaultValue: String(all.app.summaryParse?.asr?.videoFrames?.maxImages ?? 6),
-          rules: [
-            {
-              min: 1,
-              max: 60,
-              error: '请输入一个范围在 1 到 60 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
-        }),
-        components.input.number('summaryParse:asr:videoFrames:skipStartSeconds', {
-          label: '跳过片头秒数',
-          description: '抽图时避开视频开头若干秒，减少片头空镜或片头 logo 干扰',
-          defaultValue: String(all.app.summaryParse?.asr?.videoFrames?.skipStartSeconds ?? 3),
-          rules: [
-            {
-              min: 0,
-              max: 600,
-              error: '请输入一个范围在 0 到 600 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
-        }),
-        components.input.number('summaryParse:asr:videoFrames:skipEndSeconds', {
-          label: '跳过片尾秒数',
-          description: '抽图时避开视频结尾若干秒，减少片尾字幕、黑场或结束页干扰',
-          defaultValue: String(all.app.summaryParse?.asr?.videoFrames?.skipEndSeconds ?? 3),
-          rules: [
-            {
-              min: 0,
-              max: 600,
-              error: '请输入一个范围在 0 到 600 之间的数字'
-            }
-          ],
-          isDisabled: !(all.app.summaryParse?.switch ?? false) || !(all.app.summaryParse?.asr?.videoFrames?.enabled ?? false)
-        })
-      ]
-    })
-  ]
-})
+        ]
+      })
+    ]
+  })
 }
 
 const createDetailedSummaryParseAccordion = (all: ConfigType) => {
@@ -1841,9 +1841,9 @@ export const webConfig = defineConfig({
       ...BilibiliWeb(all),
       ...KuaishouWeb(all),
       ...XiaohongshuWeb(all),
-    ...HeyboxWeb(all),
-    ...GithubWeb(all),
-    ...XWeb(all),
+      ...HeyboxWeb(all),
+      ...GithubWeb(all),
+      ...XWeb(all),
       ...ZhihuWeb(all),
       ...TiebaWeb(all),
       ...WechatWeb(all),

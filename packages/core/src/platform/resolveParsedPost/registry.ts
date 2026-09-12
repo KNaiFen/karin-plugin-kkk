@@ -12,8 +12,8 @@ import {
   resolveTikTokParsedPost,
   resolveWechatParsedPost,
   resolveWeiboParsedPost,
-  resolveXParsedPost,
   resolveXiaohongshuParsedPost,
+  resolveXParsedPost,
   resolveZhihuParsedPost
 } from './lazyResolvers'
 

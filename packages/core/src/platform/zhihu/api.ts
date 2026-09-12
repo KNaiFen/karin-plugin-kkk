@@ -52,7 +52,7 @@ const decodeHtmlEntities = (value: string): string => {
     lt: '<',
     gt: '>',
     quot: '"',
-    apos: "'",
+    apos: '\'',
     nbsp: ' '
   }
   return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_, entity: string) => {

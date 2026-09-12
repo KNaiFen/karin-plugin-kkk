@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 import karin, {
   checkPkgUpdate,
   db,
@@ -9,15 +12,13 @@ import karin, {
   segment,
   updatePkg
 } from 'node-karin'
-import fs from 'node:fs'
-import path from 'node:path'
 
 import { Root } from '@/module'
 import { getChangelogImage } from '@/module/utils/changelog'
+import { Config } from '@/module/utils/Config'
 import { wrapWithErrorHandler } from '@/module/utils/ErrorHandler'
 import { getNonConsoleMasters } from '@/module/utils/master'
 import { isSemverGreater } from '@/module/utils/semver'
-import { Config } from '@/module/utils/Config'
 
 const UPDATE_LOCK_KEY = 'kkk:update:lock'
 const UPDATE_MSGID_KEY = 'kkk:update:msgId'

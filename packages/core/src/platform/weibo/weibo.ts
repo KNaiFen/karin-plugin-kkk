@@ -4,20 +4,15 @@ import {
   Base,
   createPlainVideoTitleContext,
   downloadVideo,
-  replyPlainVideoTitle,
-  type PlainVideoTitleContext
-} from '@/module'
+  type PlainVideoTitleContext,
+  replyPlainVideoTitle } from '@/module'
 import { resolveParsedPostWithCache } from '@/module/summaryParse/parsedPostCache'
 import { Config } from '@/module/utils/Config'
 import { replyAndRecordLongTaskCompletionAnchor } from '@/module/utils/LongTaskCompletionNotify'
 import { executeSafeAxiosRequest } from '@/module/utils/OutboundRequest'
 
-import { renderExternalPostCard } from '../externalPostCard'
 import type { ExternalPostContentBlock } from '../externalPostCard'
-import {
-  buildWeiboCredentialHeaders,
-  shouldPrefetchWeiboMedia
-} from './api'
+import { renderExternalPostCard } from '../externalPostCard'
 import {
   buildExternalPostCardFromParsedPost,
   buildParsedPostImageReplyElements,
@@ -25,6 +20,10 @@ import {
   buildParsedPostVideoDownloadEntries
 } from '../parsedPostAdapters'
 import { prepareParsedPostForCardRender } from '../parsedPostAssets'
+import {
+  buildWeiboCredentialHeaders,
+  shouldPrefetchWeiboMedia
+} from './api'
 import type { WeiboIdData } from './types'
 
 type WeiboRuntimeConfig = typeof Config & {

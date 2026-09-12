@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  allowEnvironmentProxyForTikTok,
   buildTikTokPostDetailParams,
   buildTikTokPostDetailUrl,
-  allowEnvironmentProxyForTikTok,
   extractTikTokItemFromHtml,
   extractTikTokVideoCandidates,
   mergeTikTokCookieHeaders,

@@ -10,9 +10,9 @@ import {
   type RichTextEmojiDefinition,
   type RichTextNode
 } from '@kkk/richtext'
+import type { DouyinCommentProps } from '@kkk/template-contracts'
 import decode from 'heic-decode'
 import jpeg from 'jpeg-js'
-import type { DouyinCommentProps } from '@kkk/template-contracts'
 
 import { Networks } from '@/module/utils'
 import { douyinFetcher } from '@/module/utils/amagiClient'

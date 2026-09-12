@@ -2,14 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   extractCookieHeader,
+  type GuestCookieAuditEvent,
   GuestCookieManager,
+  type GuestCookieManagerOptions,
+  type GuestCookiePlatform,
   hasCookieName,
   resolveDouyinBrowserWebId,
-  resolveGuestCookieRuntimeConfig,
-  type GuestCookieAuditEvent,
-  type GuestCookieManagerOptions,
-  type GuestCookiePlatform
-} from '../src/module/utils/GuestCookieManager'
+  resolveGuestCookieRuntimeConfig } from '../src/module/utils/GuestCookieManager'
 
 const createDeferred = <T>() => {
   let resolve!: (value: T) => void

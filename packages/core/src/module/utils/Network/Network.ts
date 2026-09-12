@@ -7,19 +7,18 @@ import type {
 } from 'node-karin/axios'
 import axios, { AxiosError } from 'node-karin/axios'
 
-import { NetworksConfigType } from '@/types'
-
 import { Config } from '@/module/utils/Config'
 import { normalizeAxiosProxy } from '@/module/utils/RequestConfig'
+import { NetworksConfigType } from '@/types'
 
-import { BASE_HEADERS } from './constants'
-import { Downloader } from './Downloader'
-import { extractTotalBytesFromHeaders, getErrorDescription, isRecoverableNetworkError, sanitizeHeaders } from './helpers'
-import type { CustomAxiosRequestConfig, DownloadResult, ProgressCallback, ThrottleConfig } from './types'
 import {
   executeSafeAxiosRequest,
   type OutboundRequestProfile
 } from '../OutboundRequest'
+import { BASE_HEADERS } from './constants'
+import { Downloader } from './Downloader'
+import { extractTotalBytesFromHeaders, getErrorDescription, isRecoverableNetworkError, sanitizeHeaders } from './helpers'
+import type { CustomAxiosRequestConfig, DownloadResult, ProgressCallback, ThrottleConfig } from './types'
 
 /**
  * 网络请求类

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { summaryParseConfig } from '../src/types/config/app'
 import type { SummaryInput } from '../src/module/summaryParse/types'
+import type { summaryParseConfig } from '../src/types/config/app'
 
 const state = vi.hoisted(() => ({
   downloadFile: vi.fn(),
@@ -1686,7 +1686,7 @@ describe('summary parse ASR', () => {
   it('does not let progress rendering failures interrupt local ASR', async () => {
     const chalkRgb = (await import('node-karin')).logger.chalk.rgb as unknown as ReturnType<typeof vi.fn>
     chalkRgb.mockImplementationOnce(function () {
-      throw new Error(`Cannot read properties of undefined (reading 'Symbol(STYLER)')`)
+      throw new Error('Cannot read properties of undefined (reading \'Symbol(STYLER)\')')
     })
 
     const runner = vi.fn()

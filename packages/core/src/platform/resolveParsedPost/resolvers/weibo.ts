@@ -1,9 +1,9 @@
 import { baseHeaders } from '@/module'
 import { Config } from '@/module/utils/Config'
+import type { ParsedPost } from '@/platform/parsedPost'
 import { getWeiboID } from '@/platform/weibo'
 import { fetchWeiboDetail } from '@/platform/weibo/api'
 import { buildWeiboShowCard, buildWeiboStatusCard, pickPrimaryVideo as pickWeiboPrimaryVideo } from '@/platform/weibo/summaryBlocks'
-import type { ParsedPost } from '@/platform/parsedPost'
 
 import { buildAuthor, buildVideo, cardToParsedPost, createHeaders } from '../shared'
 

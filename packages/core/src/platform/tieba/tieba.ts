@@ -4,9 +4,8 @@ import {
   Base,
   createPlainVideoTitleContext,
   downloadVideo,
-  replyPlainVideoTitle,
-  type PlainVideoTitleContext
-} from '@/module'
+  type PlainVideoTitleContext,
+  replyPlainVideoTitle } from '@/module'
 import { resolveParsedPostWithCache } from '@/module/summaryParse/parsedPostCache'
 import { Config } from '@/module/utils/Config'
 import { replyAndRecordLongTaskCompletionAnchor } from '@/module/utils/LongTaskCompletionNotify'
@@ -21,11 +20,10 @@ import {
 import {
   getTiebaContentText,
   getTiebaPostDetail,
-  tiebaMediaHeaders,
   type TiebaComment,
   type TiebaContentPart,
-  type TiebaDetail
-} from './api'
+  type TiebaDetail,
+  tiebaMediaHeaders } from './api'
 import type { TiebaIdData } from './getID'
 
 const defaultPlainTitleContext = (): PlainVideoTitleContext => createPlainVideoTitleContext(

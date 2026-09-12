@@ -735,7 +735,7 @@ describe('video parse command priority', () => {
 
     const handler = commandHandler('kkk-视频功能-抖音')
     await handler({
-      msg: `#总结 9.23 Dhb:/ m@D.hB :6pm 06/20 跨世纪大型回旋镖，带英沦为印度殖民地 # 全球深度看抖音 # 零基础看懂全球 # 全球创作者计划 https://v.douyin.com/Wdv0YPvpaYg/ 复制此链接，打开Dou音搜索，直接观看视频！`,
+      msg: '#总结 9.23 Dhb:/ m@D.hB :6pm 06/20 跨世纪大型回旋镖，带英沦为印度殖民地 # 全球深度看抖音 # 零基础看懂全球 # 全球创作者计划 https://v.douyin.com/Wdv0YPvpaYg/ 复制此链接，打开Dou音搜索，直接观看视频！',
       isGroup: false,
       reply: vi.fn()
     }, vi.fn())
@@ -763,7 +763,7 @@ describe('video parse command priority', () => {
 
     const handler = commandHandler('kkk-视频功能-抖音')
     await handler({
-      msg: `#详细总结 https://v.douyin.com/Wdv0YPvpaYg/`,
+      msg: '#详细总结 https://v.douyin.com/Wdv0YPvpaYg/',
       isGroup: false,
       reply: vi.fn()
     }, vi.fn())
@@ -791,7 +791,7 @@ describe('video parse command priority', () => {
 
     const handler = commandHandler('kkk-视频功能-抖音')
     await handler({
-      msg: `#转写原文 https://v.douyin.com/Wdv0YPvpaYg/`,
+      msg: '#转写原文 https://v.douyin.com/Wdv0YPvpaYg/',
       isGroup: false,
       reply: vi.fn()
     }, vi.fn())

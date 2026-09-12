@@ -5,7 +5,6 @@ import { markdown as renderMarkdownHtml } from '@karinjs/md-html'
 import { render } from 'node-karin'
 import { karinPathHtml } from 'node-karin/root'
 
-import { Root } from '@/root'
 import {
   clampNumber,
   DEFAULT_PAGE_MAX_ASPECT_RATIO,
@@ -15,6 +14,7 @@ import {
   type PaginationOptions,
   type RenderImageOptions
 } from '@/module/utils/Render/pagination'
+import { Root } from '@/root'
 
 const MARKDOWN_RENDER_DIRNAME = 'detailed-summary-markdown'
 const MARKDOWN_RENDER_VIEWPORT_WIDTH = 980

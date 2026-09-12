@@ -5,16 +5,15 @@ import {
   baseHeaders,
   createPlainVideoTitleContext,
   downloadVideo,
-  replyPlainVideoTitle,
-  type PlainVideoTitleContext
-} from '@/module'
+  type PlainVideoTitleContext,
+  replyPlainVideoTitle } from '@/module'
 import { resolveParsedPostWithCache } from '@/module/summaryParse/parsedPostCache'
 import { Config } from '@/module/utils/Config'
 
-import { buildTikTokNetworkOptions } from './api'
 import {
   buildParsedPostVideoDownloadEntries
 } from '../parsedPostAdapters'
+import { buildTikTokNetworkOptions } from './api'
 import type { TikTokIdData } from './getID'
 
 export class TikTok extends Base {

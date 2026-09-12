@@ -1,6 +1,6 @@
+import type { ApiErrorProps } from '@kkk/template-contracts'
 import type { AdapterType, Message } from 'node-karin'
 import karin from 'node-karin'
-import type { ApiErrorProps } from '@kkk/template-contracts'
 
 import { resolveUsableBot } from '../bot'
 import { Config } from '../Config'

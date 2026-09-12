@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   applyBrowserProxyToLaunchOptions,
-  getBrowserProxyCredentials,
   getBrowserLaunchOptions,
+  getBrowserProxyCredentials,
   resolveBrowserExecutablePath,
   resolveProjectBrowserDownloadDir
 } from '../src/module/utils/BrowserRuntime'

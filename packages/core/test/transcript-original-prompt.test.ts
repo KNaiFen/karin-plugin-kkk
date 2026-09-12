@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getTranscriptOriginalSystemPrompt,
   MULTIMODAL_TRANSCRIPT_ORIGINAL_MARKDOWN_SYSTEM_PROMPT,
   MULTIMODAL_TRANSCRIPT_ORIGINAL_SYSTEM_PROMPT,
   TEXT_ONLY_TRANSCRIPT_ORIGINAL_MARKDOWN_SYSTEM_PROMPT,
-  TEXT_ONLY_TRANSCRIPT_ORIGINAL_SYSTEM_PROMPT,
-  getTranscriptOriginalSystemPrompt
-} from '../src/module/transcriptOriginal/prompt'
+  TEXT_ONLY_TRANSCRIPT_ORIGINAL_SYSTEM_PROMPT } from '../src/module/transcriptOriginal/prompt'
 
 describe('transcript original prompt', () => {
   it('uses the fixed text-only transcript prompt when inputs contain no visual content', () => {

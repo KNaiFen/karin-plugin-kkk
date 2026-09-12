@@ -1,10 +1,9 @@
 import {
   createExternalPostMeta,
   createExternalPostStats,
-  truncateExternalPostText,
   type ExternalPostCardData,
-  type ExternalPostContentBlock
-} from '../externalPostCard'
+  type ExternalPostContentBlock,
+  truncateExternalPostText } from '../externalPostCard'
 import type { XDetail, XStatus, XVideoInfo } from './types'
 
 const getStatusTitle = (status: XStatus): string => {

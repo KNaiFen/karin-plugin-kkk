@@ -2,8 +2,9 @@ import { Readable } from 'node:stream'
 
 import { logger } from 'node-karin'
 
-import type { transcriptOriginalConfig } from '@/types/config/app'
 import { shouldRetryLLMRequestError } from '@/module/utils/llmRetry'
+import type { transcriptOriginalConfig } from '@/types/config/app'
+
 import type { SummaryInput } from '../summaryParse/types'
 import { getTranscriptOriginalSystemPrompt } from './prompt'
 import type { TranscriptOriginalResponsesResult } from './types'

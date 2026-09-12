@@ -1,6 +1,8 @@
 import { segment } from 'node-karin'
 
+import type { SummaryInput } from '@/module/summaryParse/types'
 import { buildSharedCacheHash, type CacheIdentity } from '@/module/utils/sharedCache'
+
 import type { ExternalPostCardData, ExternalPostContentBlock } from './externalPostCard'
 import type {
   ParsedPost,
@@ -8,7 +10,6 @@ import type {
   ParsedPostStatsItem,
   ParsedPostVideo
 } from './parsedPost'
-import type { SummaryInput } from '@/module/summaryParse/types'
 
 const decodeHtmlToText = (html: string): string => {
   return html
@@ -122,11 +123,11 @@ const normalizeSummaryBlock = (
 
   return block.url
     ? {
-        type: 'video',
-        url: block.url,
-        title: block.title,
-        cover: block.cover
-      }
+      type: 'video',
+      url: block.url,
+      title: block.title,
+      cover: block.cover
+    }
     : null
 }
 
@@ -145,10 +146,10 @@ const normalizeContentBlock = (
     const html = sanitizeExternalPostHtml(block.html, options)
     return html
       ? {
-          type: 'html',
-          html,
-          ...(options?.trustedPlatform ? { trusted: true } : {})
-        }
+        type: 'html',
+        html,
+        ...(options?.trustedPlatform ? { trusted: true } : {})
+      }
       : null
   }
 

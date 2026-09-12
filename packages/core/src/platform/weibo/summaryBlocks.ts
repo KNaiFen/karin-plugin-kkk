@@ -1,10 +1,9 @@
 import {
   createExternalPostMeta,
   createExternalPostStats,
-  truncateExternalPostText,
   type ExternalPostCardData,
-  type ExternalPostContentBlock
-} from '../externalPostCard'
+  type ExternalPostContentBlock,
+  truncateExternalPostText } from '../externalPostCard'
 import type { WeiboDetail, WeiboStatus, WeiboVideoInfo } from './types'
 
 const escapeHtml = (value: string): string => {

@@ -2,15 +2,15 @@ import { logger, type Message } from 'node-karin'
 import axios from 'node-karin/axios'
 
 import {
-  TIKTOK_USER_AGENT,
-  buildTikTokConfiguredRequestOptions,
-  extractTikTokCookieFromSetCookie,
-  mergeTikTokCookieHeaders
-} from './api'
-import {
   executeSafeAxiosRequest,
   isTrustedTikTokUrl
 } from '@/module/utils/OutboundRequest'
+
+import {
+  buildTikTokConfiguredRequestOptions,
+  extractTikTokCookieFromSetCookie,
+  mergeTikTokCookieHeaders,
+  TIKTOK_USER_AGENT } from './api'
 
 export interface TikTokIdData {
   type: 'one_work'
@@ -87,7 +87,7 @@ export const getTikTokID = async (
         trustedTargets.add(responseUrl)
       }
       return resp
-    },
+    }
   })
 
   const longLink =
@@ -102,9 +102,9 @@ export const getTikTokID = async (
     : ''
   const cookie = trustedResponse
     ? mergeTikTokCookieHeaders({
-        pageCookie,
-        responseMsToken: response.headers?.['x-ms-token']
-      })
+      pageCookie,
+      responseMsToken: response.headers?.['x-ms-token']
+    })
     : ''
   const result = parseTikTokLongLink(longLink, cookie)
 

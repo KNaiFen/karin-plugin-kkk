@@ -144,7 +144,7 @@ describe('database concurrency safety', () => {
             if (groupErr) return reject(groupErr)
             raw.run('CREATE TABLE GroupUserSubscriptions (groupId TEXT, sec_uid TEXT, createdAt TEXT DEFAULT CURRENT_TIMESTAMP, updatedAt TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (groupId, sec_uid))', (subscriptionErr) => {
               if (subscriptionErr) return reject(subscriptionErr)
-          raw.run(`
+              raw.run(`
             CREATE TABLE AwemeCaches_old (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               aweme_id TEXT NOT NULL,
@@ -155,22 +155,22 @@ describe('database concurrency safety', () => {
               updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
             )
           `, (createErr) => {
-            if (createErr) return reject(createErr)
-            raw.run('INSERT INTO DouyinUsers (sec_uid, short_id, remark) VALUES (?, ?, ?)', ['sec-live', '', '恢复主播'], (userErr) => {
-              if (userErr) return reject(userErr)
-              raw.run('INSERT INTO Groups (id, botId) VALUES (?, ?)', ['group-live', 'bot-live'], (insertGroupErr) => {
-                if (insertGroupErr) return reject(insertGroupErr)
-                raw.run('INSERT INTO GroupUserSubscriptions (groupId, sec_uid) VALUES (?, ?)', ['group-live', 'sec-live'], (insertSubscriptionErr) => {
-                  if (insertSubscriptionErr) return reject(insertSubscriptionErr)
-                  raw.run(
-                    'INSERT INTO AwemeCaches_old (aweme_id, sec_uid, groupId, pushType) VALUES (?, ?, ?, ?)',
-                    ['aweme-live', 'sec-live', 'group-live', 'post'],
-                    (insertErr) => insertErr ? reject(insertErr) : resolve()
-                  )
+                if (createErr) return reject(createErr)
+                raw.run('INSERT INTO DouyinUsers (sec_uid, short_id, remark) VALUES (?, ?, ?)', ['sec-live', '', '恢复主播'], (userErr) => {
+                  if (userErr) return reject(userErr)
+                  raw.run('INSERT INTO Groups (id, botId) VALUES (?, ?)', ['group-live', 'bot-live'], (insertGroupErr) => {
+                    if (insertGroupErr) return reject(insertGroupErr)
+                    raw.run('INSERT INTO GroupUserSubscriptions (groupId, sec_uid) VALUES (?, ?)', ['group-live', 'sec-live'], (insertSubscriptionErr) => {
+                      if (insertSubscriptionErr) return reject(insertSubscriptionErr)
+                      raw.run(
+                        'INSERT INTO AwemeCaches_old (aweme_id, sec_uid, groupId, pushType) VALUES (?, ?, ?, ?)',
+                        ['aweme-live', 'sec-live', 'group-live', 'post'],
+                        (insertErr) => insertErr ? reject(insertErr) : resolve()
+                      )
+                    })
+                  })
                 })
               })
-            })
-          })
             })
           })
         })

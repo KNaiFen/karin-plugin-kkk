@@ -3,9 +3,8 @@ import { type Message } from 'node-karin'
 import {
   Base,
   createPlainVideoTitleContext,
-  replyPlainVideoTitle,
-  type PlainVideoTitleContext
-} from '@/module'
+  type PlainVideoTitleContext,
+  replyPlainVideoTitle } from '@/module'
 import { resolveParsedPostWithCache } from '@/module/summaryParse/parsedPostCache'
 import { Config } from '@/module/utils/Config'
 import { replyAndRecordLongTaskCompletionAnchor } from '@/module/utils/LongTaskCompletionNotify'

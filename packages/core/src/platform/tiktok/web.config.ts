@@ -1,7 +1,7 @@
 import { components } from 'node-karin'
 
-import { type ConfigType } from '@/types'
 import { normalizePlainTitleReplyConfig } from '@/module/utils/PlainTitleReply'
+import { type ConfigType } from '@/types'
 
 /**
  * TikTok 配置组件

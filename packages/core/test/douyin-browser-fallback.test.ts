@@ -3,14 +3,13 @@ import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  DOUYIN_WORK_BROWSER_FALLBACK_TIMEOUT_MS,
   DOUYIN_USER_PAGE_BLOCKED_RESOURCE_TYPES,
+  DOUYIN_WORK_BROWSER_FALLBACK_TIMEOUT_MS,
   parseCookieHeader,
   runDouyinWorkBrowserFallback,
-  waitForDouyinWorkPageReady,
   waitForDouyinUserPostResponse,
-  waitForDouyinUserProfileResponse
-} from '../src/module/utils/DouyinBrowserFallback'
+  waitForDouyinUserProfileResponse,
+  waitForDouyinWorkPageReady } from '../src/module/utils/DouyinBrowserFallback'
 
 const createResponse = (url: string, data: unknown) => ({
   url: () => url,

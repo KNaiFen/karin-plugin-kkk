@@ -4,16 +4,21 @@ import path from 'node:path'
 
 import { logger } from 'node-karin'
 
+import { fetchBilibiliSubtitleReferences } from '@/module/summaryParse/bilibiliSubtitles'
+import {
+  resolveBilibiliVideoAid,
+  resolveBilibiliVideoCid
+} from '@/module/summaryParse/bilibiliVideoIdentity'
 import { Common } from '@/module/utils/Common'
-import { baseHeaders } from '@/module/utils/Network'
 import { Config } from '@/module/utils/Config'
-import type { ParsedPost } from '@/platform/parsedPost'
-import { resolveParsedPostFromResolvedLink } from '@/platform/resolveParsedPost'
+import { baseHeaders } from '@/module/utils/Network'
 import { getBilibiliID } from '@/platform/bilibili/getID'
 import { getDouyinID } from '@/platform/douyin/getID'
 import { getGithubID } from '@/platform/github/getID'
 import { getHeyboxID } from '@/platform/heybox/getID'
 import { getKuaishouID } from '@/platform/kuaishou/getID'
+import type { ParsedPost } from '@/platform/parsedPost'
+import { resolveParsedPostFromResolvedLink } from '@/platform/resolveParsedPost'
 import { getTiebaID } from '@/platform/tieba/getID'
 import { getTikTokID } from '@/platform/tiktok/getID'
 import { getWechatID } from '@/platform/wechat/getID'
@@ -21,11 +26,6 @@ import { getWeiboID } from '@/platform/weibo/getID'
 import { getXID } from '@/platform/x/getID'
 import { getXiaohongshuID } from '@/platform/xiaohongshu/getID'
 import { getZhihuID } from '@/platform/zhihu/getID'
-import { fetchBilibiliSubtitleReferences } from '@/module/summaryParse/bilibiliSubtitles'
-import {
-  resolveBilibiliVideoAid,
-  resolveBilibiliVideoCid
-} from '@/module/summaryParse/bilibiliVideoIdentity'
 
 import type { SummaryResolvedLink } from './types'
 

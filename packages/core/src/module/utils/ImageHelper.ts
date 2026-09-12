@@ -1,8 +1,8 @@
 import axios from 'node-karin/axios'
 
 import { Common } from './Common'
-import type { CacheIdentity } from './sharedCache'
 import { ImageDownloader } from './Network'
+import type { CacheIdentity } from './sharedCache'
 
 /**
  * 全局图片下载器实例

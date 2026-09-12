@@ -76,8 +76,8 @@ const baseConfig = {
   app: {
     livePhotoMode: 'video_and_livephoto'
   },
-    bilibili: {
-      switch: true,
+  bilibili: {
+    switch: true,
     sendContent: ['video'],
     plainTitleReply: {
       switch: true,
@@ -100,17 +100,17 @@ const baseConfig = {
     verticalMode: 'off',
     videoCodec: 'h265',
     loginPerm: 'master',
-      push: {
-        switch: true,
-        permission: 'master',
-        cron: '*/10 * * * *',
-        jitterSeconds: 120,
-        riskCooldownEnabled: true,
-        riskCooldownMs: 3600000,
-        parsedynamic: false,
-        pushVideoQuality: 0,
-        pushMaxAutoVideoSize: 50
-      }
+    push: {
+      switch: true,
+      permission: 'master',
+      cron: '*/10 * * * *',
+      jitterSeconds: 120,
+      riskCooldownEnabled: true,
+      riskCooldownMs: 3600000,
+      parsedynamic: false,
+      pushVideoQuality: 0,
+      pushMaxAutoVideoSize: 50
+    }
   },
   douyin: {
     switch: true,

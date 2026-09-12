@@ -224,8 +224,8 @@ export const createFfmpegProgressParser = (
   totalSeconds: number | undefined,
   onSnapshot: (snapshot: FfmpegProgressSnapshot) => void
 ): {
-    push: (chunk: string) => void
-  } => {
+  push: (chunk: string) => void
+} => {
   let buffer = ''
   let frame: FfmpegProgressSnapshot = {}
 

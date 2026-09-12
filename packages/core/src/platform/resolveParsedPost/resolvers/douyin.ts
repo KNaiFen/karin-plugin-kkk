@@ -7,7 +7,6 @@ import { Config } from '@/module/utils/Config'
 import { recordFailureTraceStep } from '@/module/utils/ErrorTrace'
 import { fetchDouyinOneWork, getDouyinID } from '@/platform/douyin'
 import { normalizeDouyinArticleContent } from '@/platform/douyin/articleContent'
-import { getDouyinPlayableVideoUrl, resolveDouyinPlayableVideoUrls } from '@/platform/douyin/workType'
 import {
   buildDouyinLiveInfoHeaders,
   fetchDouyinLiveDataFromReflow,
@@ -18,6 +17,7 @@ import {
   isDouyinLiveStatusActive,
   selectDouyinLiveStream
 } from '@/platform/douyin/liveRecorder'
+import { getDouyinPlayableVideoUrl, resolveDouyinPlayableVideoUrls } from '@/platform/douyin/workType'
 import type { ParsedPost } from '@/platform/parsedPost'
 
 import {
@@ -35,9 +35,9 @@ import {
 const pickDouyinAsrVideoCandidate = (
   aweme: DouyinWorkResult['data']['aweme_detail']
 ): {
-    url: string
-    backupUrls: string[]
-  } | null => {
+  url: string
+  backupUrls: string[]
+} | null => {
   type DouyinAsrCandidate = {
     size: number
     urls: string[]
@@ -188,13 +188,13 @@ const resolveDouyinLiveParsedPost = async (
   const selectedStream = selectDouyinLiveStream(liveItem, Config.douyin?.liveQuality ?? 'auto')
   const primaryVideo = selectedStream?.url
     ? buildVideo(selectedStream.url, {
-        title,
-        cover,
-        headers: createHeaders({
-          ...baseHeaders,
-          Referer: 'https://live.douyin.com'
-        })
+      title,
+      cover,
+      headers: createHeaders({
+        ...baseHeaders,
+        Referer: 'https://live.douyin.com'
       })
+    })
     : null
 
   return buildParsedPost({
@@ -280,15 +280,15 @@ export const resolveDouyinParsedPostFromWorkData = async (
     const videoUrl = getDouyinPlayableVideoUrl(aweme.video)
     const primaryVideo = videoUrl
       ? buildVideo(videoUrl, {
-          title,
-          asrSourceType: smallestVideo?.url ? 'video' : undefined,
-          asrSourceUrl: smallestVideo?.url,
-          asrSourceBackupUrls: smallestVideo?.backupUrls ?? [],
-          headers: createHeaders({
-            ...baseHeaders,
-            Referer: 'https://www.douyin.com'
-          })
+        title,
+        asrSourceType: smallestVideo?.url ? 'video' : undefined,
+        asrSourceUrl: smallestVideo?.url,
+        asrSourceBackupUrls: smallestVideo?.backupUrls ?? [],
+        headers: createHeaders({
+          ...baseHeaders,
+          Referer: 'https://www.douyin.com'
         })
+      })
       : null
 
     return buildParsedPost({

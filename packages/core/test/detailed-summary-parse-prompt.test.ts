@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getDetailedSummarySystemPrompt,
   MULTIMODAL_DETAILED_SUMMARY_MARKDOWN_SYSTEM_PROMPT,
   MULTIMODAL_DETAILED_SUMMARY_SYSTEM_PROMPT,
   TEXT_ONLY_DETAILED_SUMMARY_MARKDOWN_SYSTEM_PROMPT,
-  TEXT_ONLY_DETAILED_SUMMARY_SYSTEM_PROMPT,
-  getDetailedSummarySystemPrompt
-} from '../src/module/detailedSummaryParse/prompt'
+  TEXT_ONLY_DETAILED_SUMMARY_SYSTEM_PROMPT } from '../src/module/detailedSummaryParse/prompt'
 
 describe('detailed summary parse prompt', () => {
   it('uses the fixed text-only research prompt when inputs contain no visual content', () => {

@@ -262,14 +262,14 @@ vi.mock('@/platform/bilibili/bundle', () => ({
       playUrlData: need.playUrlData ? { data: { data: playUrlData } } : undefined,
       html5PlayUrlData: need.html5PlayUrlData
         ? {
-            data: {
-              accept_description: ['流畅'],
-              durl: [{
-                size: 10 * MB,
-                url: 'https://durl.example/video.mp4'
-              }]
-            }
+          data: {
+            accept_description: ['流畅'],
+            durl: [{
+              size: 10 * MB,
+              url: 'https://durl.example/video.mp4'
+            }]
           }
+        }
         : undefined
     }
   })

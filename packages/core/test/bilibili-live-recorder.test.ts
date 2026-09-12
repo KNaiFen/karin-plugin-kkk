@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildBilibiliLiveApiHeaders,
   buildBilibiliLivePlayInfoUrl,
-  buildBilibiliLiveRecordHeaders,
   buildBilibiliLiveRecordCommand,
+  buildBilibiliLiveRecordHeaders,
   normalizeBilibiliLiveQuality,
   normalizeBilibiliLiveRecordSeconds,
   parseBilibiliLiveApiObject,

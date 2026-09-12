@@ -1,9 +1,8 @@
 import dns from 'node:dns/promises'
 import net from 'node:net'
 import path from 'node:path'
-import { URL, fileURLToPath } from 'node:url'
+import { fileURLToPath, URL } from 'node:url'
 
-import axios from 'node-karin/axios'
 import type {
   AxiosError,
   AxiosRequestConfig,
@@ -12,6 +11,7 @@ import type {
   RawAxiosRequestHeaders,
   ResponseType
 } from 'node-karin/axios'
+import axios from 'node-karin/axios'
 
 const DEFAULT_BUFFER_LIMIT_BYTES = 5 * 1024 * 1024
 
@@ -58,7 +58,7 @@ export type OutboundSecurityOptions = {
 }
 
 type SafeAxiosRequestConfig = Pick<
-AxiosRequestConfig,
+  AxiosRequestConfig,
 'headers' | 'timeout' | 'proxy' | 'httpAgent' | 'httpsAgent' | 'validateStatus' | 'responseType' | 'data' | 'params' | 'signal'
 > & {
   url: string

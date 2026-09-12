@@ -229,6 +229,6 @@ export const appConfigSchema: SectionSchema = {
       description: '公网 IP 或域名，如：123.45.67.89 或 example.com',
       placeholder: '请输入公网 IP 或域名',
       disabled: $ne('qrLoginAddrType', 'external')
-    },
+    }
   ]
 }

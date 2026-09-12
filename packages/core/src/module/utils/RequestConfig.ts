@@ -36,11 +36,11 @@ export const normalizeAxiosProxy = (proxy: requestConfig['proxy']): AxiosProxyCo
     protocol: proxy.protocol || 'http',
     ...(username
       ? {
-          auth: {
-            username,
-            password
-          }
+        auth: {
+          username,
+          password
         }
+      }
       : {})
   }
 }
@@ -71,14 +71,14 @@ export const buildConfiguredRequestOptions = (
     timeout: request.timeout,
     ...(typeof options.maxContentLength === 'number'
       ? {
-          maxContentLength: options.maxContentLength,
-          maxBodyLength: options.maxContentLength
-        }
+        maxContentLength: options.maxContentLength,
+        maxBodyLength: options.maxContentLength
+      }
       : {}),
     ...(options.outboundProfile
       ? {
-          outboundProfile: options.outboundProfile
-        }
+        outboundProfile: options.outboundProfile
+      }
       : {})
   }
 }

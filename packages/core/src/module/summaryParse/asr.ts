@@ -4,8 +4,8 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
-import axios from 'node-karin/axios'
 import type { AxiosHeaders, RawAxiosRequestHeaders } from 'node-karin/axios'
+import axios from 'node-karin/axios'
 
 import { Common } from '@/module'
 import { getMediaDuration } from '@/module/utils'
@@ -13,15 +13,12 @@ import {
   assertPathWithinRoot,
   executeSafeAxiosRequest
 } from '@/module/utils/OutboundRequest'
-
 import type { summaryParseConfig } from '@/types/config/app'
 
 import {
-  endSummaryProgressTimer,
-  logSummaryMessage,
-  logSummaryProgress,
-  startSummaryProgressTimer
-} from './progress'
+  resolveBilibiliVideoCid,
+  resolveBilibiliVideoPage
+} from './bilibiliVideoIdentity'
 import {
   createFfmpegProgressParser,
   createSummaryCliActivity,
@@ -29,9 +26,11 @@ import {
   renderSummaryCliProgress
 } from './cliProgress'
 import {
-  resolveBilibiliVideoCid,
-  resolveBilibiliVideoPage
-} from './bilibiliVideoIdentity'
+  endSummaryProgressTimer,
+  logSummaryMessage,
+  logSummaryProgress,
+  startSummaryProgressTimer
+} from './progress'
 import type { SummaryInput, SummaryLinkProgressContext } from './types'
 
 type ExecInvocation = {
@@ -1078,9 +1077,9 @@ const readCachedFrameManifest = (
   manifestPath: string,
   framePrefix: string
 ): {
-    framePaths: string[]
-    timestamps: number[]
-  } | null => {
+  framePaths: string[]
+  timestamps: number[]
+} | null => {
   if (!fileExists(manifestPath)) return null
   if (!safeRealpathWithinCacheRoot(manifestPath)) return null
 

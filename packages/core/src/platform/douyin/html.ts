@@ -6,8 +6,8 @@ import type {
   Result
 } from '@ikenxuan/amagi'
 
-import type { DouyinIdData } from './getID'
 import { parseDouyinArticleContentValue } from './articleContent'
+import type { DouyinIdData } from './getID'
 import {
   normalizeDouyinVideoUri,
   resolveDouyinPlayableMusicUrls,
@@ -442,22 +442,22 @@ const normalizeRouterImages = (value: unknown): DouyinHtmlImage[] => {
         clipType,
         ...(videoUrl
           ? {
-              video: {
-                uri: normalizeDouyinVideoUri(item?.video?.play_addr_h264?.uri) ||
+            video: {
+              uri: normalizeDouyinVideoUri(item?.video?.play_addr_h264?.uri) ||
                   normalizeDouyinVideoUri(item?.video?.play_addr?.uri),
-                playUrl: videoUrl,
-                backupUrls,
-                coverUrl: pickFirstString(urlList[0]),
-                duration: toNumber(item?.video?.duration),
-                width: toNumber(item?.video?.width ?? item?.video?.play_addr?.width),
-                height: toNumber(item?.video?.height ?? item?.video?.play_addr?.height),
-                ratio: normalizeRatio(
-                  toNumber(item?.video?.width ?? item?.video?.play_addr?.width),
-                  toNumber(item?.video?.height ?? item?.video?.play_addr?.height),
-                  item?.video?.ratio
-                )
-              }
+              playUrl: videoUrl,
+              backupUrls,
+              coverUrl: pickFirstString(urlList[0]),
+              duration: toNumber(item?.video?.duration),
+              width: toNumber(item?.video?.width ?? item?.video?.play_addr?.width),
+              height: toNumber(item?.video?.height ?? item?.video?.play_addr?.height),
+              ratio: normalizeRatio(
+                toNumber(item?.video?.width ?? item?.video?.play_addr?.width),
+                toNumber(item?.video?.height ?? item?.video?.play_addr?.height),
+                item?.video?.ratio
+              )
             }
+          }
           : {})
       }
     })
@@ -487,16 +487,16 @@ const normalizePaceImages = (value: unknown): DouyinHtmlImage[] => {
         clipType: livePhotoType ? 5 : 2,
         ...(videoUrl
           ? {
-              video: {
-                playUrl: videoUrl,
-                backupUrls,
-                coverUrl: pickFirstString(item?.video?.cover, urlList[0]),
-                duration: toNumber(item?.video?.duration),
-                width: 0,
-                height: 0,
-                ratio: ''
-              }
+            video: {
+              playUrl: videoUrl,
+              backupUrls,
+              coverUrl: pickFirstString(item?.video?.cover, urlList[0]),
+              duration: toNumber(item?.video?.duration),
+              width: 0,
+              height: 0,
+              ratio: ''
             }
+          }
           : {})
       }
     })
@@ -998,19 +998,19 @@ export const buildDouyinWorkResultFromHtmlWork = (work: DouyinHtmlWork): DouyinW
     },
     music: work.music
       ? {
-          author: work.music.author,
-          title: work.music.title,
-          extra: work.music.extra,
-          play_url: {
-            uri: work.music.playUrl,
-            url_list: work.music.playUrl ? [work.music.playUrl, ...(work.music.backupUrls ?? [])] : [],
-            url_key: '',
-            width: 0,
-            height: 0
-          },
-          cover_hd: buildImageResource(work.music.coverUrl, 0, 0),
-          cover_large: buildImageResource(work.music.coverUrl, 0, 0)
-        }
+        author: work.music.author,
+        title: work.music.title,
+        extra: work.music.extra,
+        play_url: {
+          uri: work.music.playUrl,
+          url_list: work.music.playUrl ? [work.music.playUrl, ...(work.music.backupUrls ?? [])] : [],
+          url_key: '',
+          width: 0,
+          height: 0
+        },
+        cover_hd: buildImageResource(work.music.coverUrl, 0, 0),
+        cover_large: buildImageResource(work.music.coverUrl, 0, 0)
+      }
       : null,
     video: {
       duration: toNumber(work.video?.duration),
@@ -1019,17 +1019,17 @@ export const buildDouyinWorkResultFromHtmlWork = (work: DouyinHtmlWork): DouyinW
       ratio: pickFirstString(work.video?.ratio),
       bit_rate: work.video?.playUrl
         ? [{
-            format: 'mp4',
-            FPS: toNumber(work.video?.fps),
-            gear_name: 'html_primary',
-            HDR_bit: '',
-            HDR_type: '',
-            is_bytevc1: 0,
-            is_h265: 0,
-            quality_type: 0,
-            video_extra: '',
-            play_addr: videoPlayAddr
-          }]
+          format: 'mp4',
+          FPS: toNumber(work.video?.fps),
+          gear_name: 'html_primary',
+          HDR_bit: '',
+          HDR_type: '',
+          is_bytevc1: 0,
+          is_h265: 0,
+          quality_type: 0,
+          video_extra: '',
+          play_addr: videoPlayAddr
+        }]
         : [],
       play_addr: videoPlayAddr,
       play_addr_h264: videoPlayAddr,
@@ -1049,42 +1049,42 @@ export const buildDouyinWorkResultFromHtmlWork = (work: DouyinHtmlWork): DouyinW
     },
     images: work.images.length > 0
       ? work.images.map((image) => {
-          const primaryUrl = pickFirstString(image.urlList[0])
-          const primaryVideoUrl = pickFirstString(image.video?.playUrl)
-          const imageVideoAddr = buildVideoPlayAddr(
-            primaryVideoUrl,
-            image.video?.backupUrls ?? [],
-            toNumber(image.video?.width),
-            toNumber(image.video?.height),
-            0,
-            image.video?.uri
-          )
+        const primaryUrl = pickFirstString(image.urlList[0])
+        const primaryVideoUrl = pickFirstString(image.video?.playUrl)
+        const imageVideoAddr = buildVideoPlayAddr(
+          primaryVideoUrl,
+          image.video?.backupUrls ?? [],
+          toNumber(image.video?.width),
+          toNumber(image.video?.height),
+          0,
+          image.video?.uri
+        )
 
-          return {
-            url_list: image.urlList,
-            download_url_list: image.downloadUrlList,
-            width: image.width,
-            height: image.height,
-            clip_type: image.clipType,
-            ...(image.video
-              ? {
-                  video: {
-                    duration: image.video.duration,
-                    width: image.video.width,
-                    height: image.video.height,
-                    ratio: image.video.ratio,
-                    play_addr: imageVideoAddr,
-                    play_addr_h264: imageVideoAddr,
-                    cover: buildImageResource(
-                      pickFirstString(image.video.coverUrl, primaryUrl),
-                      image.video.width,
-                      image.video.height
-                    )
-                  }
-                }
-              : {})
-          }
-        })
+        return {
+          url_list: image.urlList,
+          download_url_list: image.downloadUrlList,
+          width: image.width,
+          height: image.height,
+          clip_type: image.clipType,
+          ...(image.video
+            ? {
+              video: {
+                duration: image.video.duration,
+                width: image.video.width,
+                height: image.video.height,
+                ratio: image.video.ratio,
+                play_addr: imageVideoAddr,
+                play_addr_h264: imageVideoAddr,
+                cover: buildImageResource(
+                  pickFirstString(image.video.coverUrl, primaryUrl),
+                  image.video.width,
+                  image.video.height
+                )
+              }
+            }
+            : {})
+        }
+      })
       : null
   }
 

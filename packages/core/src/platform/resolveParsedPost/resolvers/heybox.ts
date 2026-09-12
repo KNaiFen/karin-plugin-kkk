@@ -1,8 +1,8 @@
 import { baseHeaders } from '@/module'
 import { Config } from '@/module/utils/Config'
+import { createExternalPostContentFromParts } from '@/platform/externalPostCard'
 import { getHeyboxID } from '@/platform/heybox'
 import { fetchHeyboxDetail } from '@/platform/heybox/api'
-import { createExternalPostContentFromParts } from '@/platform/externalPostCard'
 import type { ParsedPost, ParsedPostBlock } from '@/platform/parsedPost'
 
 import { buildAuthor, buildParsedPost, buildVideo, createHeaders, toMeta, toStats } from '../shared'

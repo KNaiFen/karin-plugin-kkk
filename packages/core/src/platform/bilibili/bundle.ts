@@ -1,20 +1,19 @@
-import { DynamicType, Result, BiliBiliVideoPlayurlNoLogin, BiliDynamicInfoUnion, BiliOneWork, BiliVideoPlayurlIsLogin } from '@ikenxuan/amagi'
+import { BiliBiliVideoPlayurlNoLogin, BiliDynamicInfoUnion, BiliOneWork, BiliVideoPlayurlIsLogin, DynamicType, Result } from '@ikenxuan/amagi'
 import { bilibiliApiUrls } from '@ikenxuan/amagi'
 
-import { baseHeaders, Networks } from '@/module/utils'
-import { Config } from '@/module/utils/Config'
 import { fetchBilibiliSubtitleReferences } from '@/module/summaryParse/bilibiliSubtitles'
 import {
   resolveBilibiliVideoAid,
   resolveBilibiliVideoCid,
   resolveBilibiliVideoPage
 } from '@/module/summaryParse/bilibiliVideoIdentity'
-import {
-  resolveSharedJsonCacheWithMerge,
-  writeSharedJsonCache,
-  type CacheIdentity
-} from '@/module/utils/sharedCache'
+import { baseHeaders, Networks } from '@/module/utils'
 import { amagiClient, SOFT_ERROR_CODES, softFetch } from '@/module/utils/amagiClient'
+import { Config } from '@/module/utils/Config'
+import {
+  type CacheIdentity,
+  resolveSharedJsonCacheWithMerge,
+  writeSharedJsonCache } from '@/module/utils/sharedCache'
 import {
   getBilibiliDynamicItem,
   getBilibiliDynamicType,
@@ -165,9 +164,9 @@ const loadOneVideoBundle = async (
   const infoData = cached?.infoData ?? (
     shouldLoadInfo
       ? await amagiClient.bilibili.fetcher.fetchVideoInfo({
-          bvid: String(idData.bvid ?? ''),
-          typeMode: 'strict'
-        }) as Result<BiliOneWork>
+        bvid: String(idData.bvid ?? ''),
+        typeMode: 'strict'
+      }) as Result<BiliOneWork>
       : undefined
   )
   if (infoData && !cached?.infoData) {
@@ -295,9 +294,9 @@ const loadDynamicBundle = async (
   const dynamicDetail = normalizedCachedDetail ?? (
     shouldLoadDetail
       ? normalizeBilibiliDynamicDetailResult(await amagiClient.bilibili.fetcher.fetchDynamicDetail({
-          dynamic_id: String(idData.dynamic_id ?? ''),
-          typeMode: 'strict'
-        }) as Result<BiliDynamicInfoUnion>)
+        dynamic_id: String(idData.dynamic_id ?? ''),
+        typeMode: 'strict'
+      }) as Result<BiliDynamicInfoUnion>)
       : undefined
   )
   if (dynamicDetail && dynamicDetail !== cached?.dynamicDetail) {
@@ -342,9 +341,9 @@ const loadDynamicBundle = async (
     const avVideoInfo = cached?.avVideoInfo ?? (
       need.avVideoInfo || need.avPlayUrlData || need.avSubtitles
         ? await amagiClient.bilibili.fetcher.fetchVideoInfo({
-            bvid: archiveBvid,
-            typeMode: 'strict'
-          }) as Result<BiliOneWork>
+          bvid: archiveBvid,
+          typeMode: 'strict'
+        }) as Result<BiliOneWork>
         : undefined
     )
     if (avVideoInfo && !cached?.avVideoInfo) {

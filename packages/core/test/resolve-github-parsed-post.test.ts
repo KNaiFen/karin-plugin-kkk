@@ -310,7 +310,7 @@ AI Coding / Agent 工作流中文实战教程
 
 describe('extractGithubReadmeBodyHtml', () => {
   it('extracts article markdown body inner html from rendered document', () => {
-    const html = `<!DOCTYPE html><html><head></head><body><article class="markdown-body"><h1>标题</h1><div align="center"><img alt="Stars" src="https://img.shields.io/test.svg"></div></article></body></html>`
+    const html = '<!DOCTYPE html><html><head></head><body><article class="markdown-body"><h1>标题</h1><div align="center"><img alt="Stars" src="https://img.shields.io/test.svg"></div></article></body></html>'
     expect(extractGithubReadmeBodyHtml(html)).toBe('<h1>标题</h1><div align="center"><img alt="Stars" src="https://img.shields.io/test.svg"></div>')
   })
 })

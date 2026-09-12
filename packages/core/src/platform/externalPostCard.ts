@@ -1,4 +1,4 @@
-import { logger, type ElementTypes, type Message } from 'node-karin'
+import { type ElementTypes, logger, type Message } from 'node-karin'
 
 import { Render, replyRenderedImages } from '@/module'
 

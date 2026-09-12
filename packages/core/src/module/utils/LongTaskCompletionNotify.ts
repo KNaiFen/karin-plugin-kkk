@@ -1,4 +1,4 @@
-import { segment, type ElementTypes, type Message } from 'node-karin'
+import { type ElementTypes, type Message, segment } from 'node-karin'
 
 import { Config } from './Config'
 

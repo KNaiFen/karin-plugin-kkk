@@ -123,9 +123,9 @@ export class GuestCookieAuditLogger {
       reason: event.reason ? sanitizeText(event.reason, 80) : undefined,
       error: event.error
         ? {
-            name: sanitizeText(event.error.name, 120),
-            message: sanitizeText(event.error.message, 500)
-          }
+          name: sanitizeText(event.error.name, 120),
+          message: sanitizeText(event.error.message, 500)
+        }
         : undefined
     }
   }

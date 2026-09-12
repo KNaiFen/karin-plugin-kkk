@@ -1,8 +1,8 @@
 import { logger } from 'node-karin'
 
+import { Config } from '@/module/utils/Config'
 import { Networks } from '@/module/utils/Networks'
 import { normalizeAxiosProxy } from '@/module/utils/RequestConfig'
-import { Config } from '@/module/utils/Config'
 
 import type { GithubRepositoryIdData } from './types'
 

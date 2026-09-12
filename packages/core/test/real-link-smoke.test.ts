@@ -146,10 +146,10 @@ vi.mock('@/module', () => ({
     maxRedirects: options.maxRedirects,
     proxy: request?.proxy?.switch
       ? {
-          host: request.proxy.host,
-          port: Number(request.proxy.port),
-          protocol: request.proxy.protocol || 'http'
-        }
+        host: request.proxy.host,
+        port: Number(request.proxy.port),
+        protocol: request.proxy.protocol || 'http'
+      }
       : false,
     headers: {
       ...(request?.headers ?? {})

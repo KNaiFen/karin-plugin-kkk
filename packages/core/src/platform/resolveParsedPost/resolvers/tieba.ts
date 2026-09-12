@@ -1,7 +1,7 @@
-import { getTiebaID } from '@/platform/tieba'
-import { getTiebaContentText, getTiebaPostDetail, tiebaMediaHeaders } from '@/platform/tieba/api'
 import { createExternalPostContentFromParts } from '@/platform/externalPostCard'
 import type { ParsedPost, ParsedPostBlock } from '@/platform/parsedPost'
+import { getTiebaID } from '@/platform/tieba'
+import { getTiebaContentText, getTiebaPostDetail, tiebaMediaHeaders } from '@/platform/tieba/api'
 
 import { buildAuthor, buildParsedPost, toMeta, toStats } from '../shared'
 

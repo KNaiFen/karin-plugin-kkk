@@ -16,26 +16,26 @@ import {
   extractTikTokMessageUrl,
   extractWechatMessageUrl,
   extractWeiboMessageUrl,
-  extractXMessageUrl,
   extractXiaohongshuMessageUrl,
+  extractXMessageUrl,
   extractZhihuMessageUrl
 } from '@/apps/linkExtractors'
 import { resolveParsedPostWithCache } from '@/module/summaryParse/parsedPostCache'
 import type { SummaryParsePlatform } from '@/module/summaryParse/types'
+import { Config } from '@/module/utils/Config'
+import { guestCookieManager } from '@/module/utils/GuestCookieManager'
 import {
   normalizePlainTitleReplyConfig,
   type PlainTitleReplyType,
   type PlainVideoTitlePlatform
 } from '@/module/utils/PlainTitleReply'
-import { Config } from '@/module/utils/Config'
-import { guestCookieManager } from '@/module/utils/GuestCookieManager'
-import type { ParsedPost } from '@/platform/parsedPost'
-import { DouYin } from '@/platform/douyin'
 import { getBilibiliID } from '@/platform/bilibili/getID'
+import { DouYin } from '@/platform/douyin'
 import { getDouyinID } from '@/platform/douyin/getID'
 import { getGithubID } from '@/platform/github/getID'
 import { getHeyboxID } from '@/platform/heybox/getID'
 import { getKuaishouID } from '@/platform/kuaishou/getID'
+import type { ParsedPost } from '@/platform/parsedPost'
 import { getTiebaID } from '@/platform/tieba/getID'
 import { getTikTokID } from '@/platform/tiktok/getID'
 import { getWechatID } from '@/platform/wechat/getID'

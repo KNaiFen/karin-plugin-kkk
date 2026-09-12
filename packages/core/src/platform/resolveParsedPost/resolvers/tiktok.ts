@@ -1,7 +1,7 @@
 import { baseHeaders } from '@/module'
+import type { ParsedPost } from '@/platform/parsedPost'
 import { getTikTokID } from '@/platform/tiktok'
 import { fetchTikTokVideoDetail } from '@/platform/tiktok/api'
-import type { ParsedPost } from '@/platform/parsedPost'
 
 import { buildAuthor, buildParsedPost, buildVideo, createHeaders, normalizeTitle, textBlock } from '../shared'
 

@@ -1,8 +1,8 @@
 import { baseHeaders } from '@/module'
+import type { ParsedPost } from '@/platform/parsedPost'
 import { getXID } from '@/platform/x'
 import { fetchXDetail } from '@/platform/x/api'
 import { buildXExternalPostCard, pickPrimaryVideo as pickXPrimaryVideo } from '@/platform/x/summaryBlocks'
-import type { ParsedPost } from '@/platform/parsedPost'
 
 import { buildAuthor, buildVideo, cardToParsedPost, createHeaders } from '../shared'
 

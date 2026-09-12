@@ -18,6 +18,7 @@ import type { RequestHandler } from 'node-karin/express'
 
 import { douyinFetcher } from '@/module/utils/amagiClient'
 import { fetchDouyinOneWork } from '@/platform/douyin/oneWork'
+
 import { getDouyinPlayableVideoUrl } from '../workType'
 
 /**

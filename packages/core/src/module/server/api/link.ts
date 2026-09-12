@@ -8,6 +8,7 @@ import {
   logger
 } from 'node-karin'
 import type { RequestHandler } from 'node-karin/express'
+
 import { executeSafeAxiosRequest } from '@/module/utils/OutboundRequest'
 
 type SupportedPlatform = 'douyin' | 'bilibili' | 'unknown'

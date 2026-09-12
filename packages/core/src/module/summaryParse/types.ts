@@ -1,4 +1,4 @@
-import type { summaryParseConfig } from '@/types/config/app'
+import type { ExternalPostCardData, ExternalPostContentBlock } from '@/platform/externalPostCard'
 import type {
   ParsedPost,
   ParsedPostBlock,
@@ -6,8 +6,7 @@ import type {
   ParsedPostSubtitle,
   ParsedPostVideo
 } from '@/platform/parsedPost'
-
-import type { ExternalPostCardData, ExternalPostContentBlock } from '@/platform/externalPostCard'
+import type { summaryParseConfig } from '@/types/config/app'
 
 export type SummaryTrigger = {
   keyword: string

@@ -24,9 +24,9 @@ export const resolveGithubParsedPost = async (url: string): Promise<ParsedPost> 
       ...textBlock(repository.description),
       ...(readmeRender.html
         ? [{
-            type: 'html' as const,
-            html: readmeRender.html
-          }]
+          type: 'html' as const,
+          html: readmeRender.html
+        }]
         : [])
     ]
 
@@ -86,9 +86,9 @@ export const resolveGithubParsedPost = async (url: string): Promise<ParsedPost> 
       ...textBlock(repository.description),
       ...(readmeRender.html
         ? [{
-            type: 'html' as const,
-            html: readmeRender.html
-          }]
+          type: 'html' as const,
+          html: readmeRender.html
+        }]
         : [])
     ],
     images: [repository.ogImage, readmeRender.image].filter((item): item is string => Boolean(item)).map(url => ({ url })),

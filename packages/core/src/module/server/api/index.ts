@@ -8,11 +8,7 @@ import { bilibiliApiRouter } from '@/platform/bilibili/api'
 import { douyinApiRouter } from '@/platform/douyin/api'
 
 import { signatureVerificationMiddleware } from '../auth'
-import {
-  createParseByUrlHandler,
-  createSimulateHandlerByUrlHandler,
-  DIAGNOSTIC_PARSE_BY_URL_PLATFORMS
-} from './diagnosticParseByUrl'
+import { writeAuthCompatibilityMiddleware } from './authCompat'
 import { getBotGroups, getBots, getGroupsBatch } from './bots'
 import {
   getAllConfig,
@@ -20,7 +16,11 @@ import {
   patchConfigItem,
   updateAllConfig,
   updateConfigModule } from './config'
-import { writeAuthCompatibilityMiddleware } from './authCompat'
+import {
+  createParseByUrlHandler,
+  createSimulateHandlerByUrlHandler,
+  DIAGNOSTIC_PARSE_BY_URL_PLATFORMS
+} from './diagnosticParseByUrl'
 import { getGroups } from './groups'
 import { resolveLink } from './link'
 import { getFullSchema, getModuleSchemaApi } from './schema'

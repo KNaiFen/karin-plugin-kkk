@@ -9,8 +9,8 @@ export {
   resolveTikTokParsedPost,
   resolveWechatParsedPost,
   resolveWeiboParsedPost,
-  resolveXParsedPost,
   resolveXiaohongshuParsedPost,
+  resolveXParsedPost,
   resolveZhihuParsedPost
 } from './lazyResolvers'
-export { platformResolvers, resolveParsedPostFromResolvedLink, type ParsedPostResolver } from './registry'
+export { type ParsedPostResolver, platformResolvers, resolveParsedPostFromResolvedLink } from './registry'

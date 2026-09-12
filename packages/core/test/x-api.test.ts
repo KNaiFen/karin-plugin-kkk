@@ -55,11 +55,11 @@ vi.mock('@/module', () => ({
     timeout: request.timeout ?? 10000,
     proxy: request.proxy?.switch
       ? {
-          host: request.proxy.host,
-          port: request.proxy.port,
-          protocol: request.proxy.protocol,
-          auth: request.proxy.auth
-        }
+        host: request.proxy.host,
+        port: request.proxy.port,
+        protocol: request.proxy.protocol,
+        auth: request.proxy.auth
+      }
       : false,
     headers: {}
   })

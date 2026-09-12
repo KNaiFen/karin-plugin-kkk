@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import type { ParsedPost } from '../src/platform/parsedPost'
 import {
   buildExternalPostCardFromParsedPost,
   buildParsedPostImageReplyElements,
   buildParsedPostVideoDownloadEntries,
   buildSummaryInputFromParsedPost
 } from '../src/platform/parsedPostAdapters'
-import type { ParsedPost } from '../src/platform/parsedPost'
 
 const createParsedPost = (overrides: Partial<ParsedPost> = {}): ParsedPost => ({
   platform: 'weibo',

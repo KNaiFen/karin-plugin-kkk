@@ -2,8 +2,8 @@ import axios from 'node-karin/axios'
 
 import { baseHeaders } from '@/module'
 
-import type { XAuthor, XDetail, XIdData, XStatus, XStatusStats, XVideoInfo } from './types'
 import { buildXConfiguredRequestOptions } from './request'
+import type { XAuthor, XDetail, XIdData, XStatus, XStatusStats, XVideoInfo } from './types'
 
 const EASYCOMMENT_API = 'https://easycomment.ai/api/twitter/v1/free/get-tweet-detail'
 const FALLBACK_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'

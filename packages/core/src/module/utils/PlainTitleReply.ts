@@ -1,5 +1,6 @@
 import type { Message } from 'node-karin'
-import type { PlainTitleReplyType, plainTitleReplyConfig, plainTitleReplyConfigCompat } from '@/types/config/plainTitleReply'
+
+import type { plainTitleReplyConfig, plainTitleReplyConfigCompat, PlainTitleReplyType } from '@/types/config/plainTitleReply'
 
 export type PlainVideoTitlePlatform = 'B站' | '抖音' | '小红书' | 'TikTok' | '小黑盒' | 'GitHub' | '快手' | 'X' | '知乎' | '贴吧' | '微信公众号' | '微博'
 
@@ -10,7 +11,7 @@ export type PlainVideoTitleContext = {
   sent: boolean
 }
 
-export type { PlainTitleReplyType, plainTitleReplyConfig, plainTitleReplyConfigCompat }
+export type { plainTitleReplyConfig, plainTitleReplyConfigCompat, PlainTitleReplyType }
 
 const plainTitleReplyTypes: PlainTitleReplyType[] = ['video', 'image', 'article', 'live', 'text']
 

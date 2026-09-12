@@ -1,5 +1,5 @@
-import axios from 'node-karin/axios'
 import { markdown as renderMarkdownHtml } from '@karinjs/md-html'
+import axios from 'node-karin/axios'
 
 import { baseHeaders, buildConfiguredRequestOptions } from '@/module'
 import { Config } from '@/module/utils/Config'
@@ -176,9 +176,9 @@ export const buildGithubReadmeRenderContent = (
     idData?: GithubRepositoryIdData
   }
 ): {
-    html: string
-    image?: string
-  } => {
+  html: string
+  image?: string
+} => {
   if (!readme?.content) return { html: '' }
   const normalizedMarkdown = normalizeMarkdown(readme.content)
   const rendered = renderMarkdownHtml(normalizedMarkdown, {

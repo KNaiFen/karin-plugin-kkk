@@ -2,8 +2,8 @@ import { logger } from 'node-karin'
 
 import { Networks } from '@/module/utils/Networks'
 
-import type { XIdData } from './types'
 import { buildXNetworkOptions } from './request'
+import type { XIdData } from './types'
 
 const X_STATUS_PATH = /^\/([A-Za-z0-9_]{1,20})\/status\/(\d+)(?:\/.*)?$/i
 

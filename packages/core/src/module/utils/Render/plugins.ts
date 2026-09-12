@@ -1,9 +1,9 @@
+import type { BilibiliPosterPalette } from '@kkk/template-contracts'
 import { Window } from 'happy-dom'
 import jpeg from 'jpeg-js'
 import { logger } from 'node-karin'
 import { PNG } from 'pngjs'
 import QRCodeStyling from 'qr-code-styling'
-import type { BilibiliPosterPalette } from '@kkk/template-contracts'
 import type { Plugin } from 'template/server'
 
 type BeforeRenderContext = Parameters<NonNullable<Plugin['beforeRender']>>[0]

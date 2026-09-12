@@ -1,5 +1,5 @@
-import type { requestConfig } from './request'
 import type { plainTitleReplyConfigCompat } from './plainTitleReply'
+import type { requestConfig } from './request'
 
 /** 定义 TikTok 解析工具的配置接口 */
 export interface tiktokConfig {

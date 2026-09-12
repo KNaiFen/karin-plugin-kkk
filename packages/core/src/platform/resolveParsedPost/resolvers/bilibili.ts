@@ -1,19 +1,19 @@
-import { logger } from 'node-karin'
 import { DynamicType } from '@ikenxuan/amagi'
+import { logger } from 'node-karin'
 
 import { baseHeaders } from '@/module'
-import { Config } from '@/module/utils/Config'
-import { amagiClient } from '@/module/utils/amagiClient'
-import { getBilibiliID } from '@/platform/bilibili'
-import { collectBilibiliCdnBackupUrls } from '@/platform/bilibili/cdnSelector'
 import {
   resolveBilibiliVideoCid
 } from '@/module/summaryParse/bilibiliVideoIdentity'
-import type { ParsedPost, ParsedPostVideo } from '@/platform/parsedPost'
+import { amagiClient } from '@/module/utils/amagiClient'
+import { Config } from '@/module/utils/Config'
+import { getBilibiliID } from '@/platform/bilibili'
 import {
   fetchBilibiliDynamicBundle,
   fetchBilibiliOneVideoBundle
 } from '@/platform/bilibili/bundle'
+import { collectBilibiliCdnBackupUrls } from '@/platform/bilibili/cdnSelector'
+import type { ParsedPost, ParsedPostVideo } from '@/platform/parsedPost'
 
 import { buildAuthor, buildParsedPost, buildVideo, createHeaders, imageBlocks, textBlock, toMeta, toStats } from '../shared'
 
@@ -210,39 +210,39 @@ export const resolveBilibiliParsedPost = async (url: string): Promise<ParsedPost
     const cid = episode?.cid
     const stream = epId && cid
       ? await amagiClient.bilibili.fetcher.fetchBangumiStreamUrl({
-          ep_id: epId,
-          cid,
-          typeMode: 'strict'
-        })
+        ep_id: epId,
+        cid,
+        typeMode: 'strict'
+      })
       : null
     const videoUrl = stream?.data.result?.dash?.video?.[0]?.base_url
     const primaryVideo = videoUrl
       ? buildVideo(videoUrl, {
-          title: result.title || result.season_title,
-          durationSeconds: episode?.duration ?? undefined,
-          audioUrl: stream?.data.result?.dash?.audio?.[0]?.base_url,
-          audioBackupUrls: stream?.data.result?.dash?.audio?.[0]
-            ? collectBilibiliCdnBackupUrls(stream.data.result.dash.audio[0])
-            : [],
-          asrSourceType: stream?.data.result?.dash?.audio?.[0]?.base_url ? 'audio' : undefined,
-          asrSourceUrl: stream?.data.result?.dash?.audio?.[0]?.base_url,
-          asrSourceBackupUrls: stream?.data.result?.dash?.audio?.[0]
-            ? collectBilibiliCdnBackupUrls(stream.data.result.dash.audio[0])
-            : [],
-          subtitles: result.subtitle
-            ? [{
-                source: 'bilibili',
-                language: 'zh-CN',
-                label: '番剧副标题',
-                text: result.subtitle
-              }]
-            : [],
-          headers: createHeaders({
-            ...baseHeaders,
-            Cookie: Config.cookies.bilibili,
-            Referer: 'https://www.bilibili.com'
-          })
+        title: result.title || result.season_title,
+        durationSeconds: episode?.duration ?? undefined,
+        audioUrl: stream?.data.result?.dash?.audio?.[0]?.base_url,
+        audioBackupUrls: stream?.data.result?.dash?.audio?.[0]
+          ? collectBilibiliCdnBackupUrls(stream.data.result.dash.audio[0])
+          : [],
+        asrSourceType: stream?.data.result?.dash?.audio?.[0]?.base_url ? 'audio' : undefined,
+        asrSourceUrl: stream?.data.result?.dash?.audio?.[0]?.base_url,
+        asrSourceBackupUrls: stream?.data.result?.dash?.audio?.[0]
+          ? collectBilibiliCdnBackupUrls(stream.data.result.dash.audio[0])
+          : [],
+        subtitles: result.subtitle
+          ? [{
+            source: 'bilibili',
+            language: 'zh-CN',
+            label: '番剧副标题',
+            text: result.subtitle
+          }]
+          : [],
+        headers: createHeaders({
+          ...baseHeaders,
+          Cookie: Config.cookies.bilibili,
+          Referer: 'https://www.bilibili.com'
         })
+      })
       : null
 
     return buildParsedPost({

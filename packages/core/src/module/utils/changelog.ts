@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 
+import type { ChangelogProps } from '@kkk/template-contracts'
 import { Message, parseChangelog, range } from 'node-karin'
 import axios from 'node-karin/axios'
-import type { ChangelogProps } from '@kkk/template-contracts'
 
 import { baseHeaders, Render, Root } from '@/module'
 
