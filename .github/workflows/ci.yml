@@ -64,9 +64,8 @@ jobs:
         run: pnpm --filter karin-plugin-kkk run typecheck
       - name: Typecheck shared packages
         run: |
+          pnpm exec tsc -b packages/template-contracts --emitDeclarationOnly
           pnpm --dir packages/template exec tsc --noEmit -p tsconfig.app.json
-          pnpm --dir packages/richtext exec tsc --noEmit
-          pnpm --dir packages/template-contracts exec tsc --noEmit
       - name: Typecheck Amagi
         run: pnpm --filter @ikenxuan/amagi run typecheck
       - name: Test Amagi
