@@ -82,4 +82,23 @@ describe('amagi xiaohongshu note detail request', () => {
     })
     expect(state.fetchData).toHaveBeenCalledTimes(2)
   })
+
+  it.each(['User-Agent', 'user-agent'])('aligns API and HTML Client Hints with the configured %s', async (headerName) => {
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0'
+    const pageState = {
+      note: { noteDetailMap: { 'note-1': { note: { noteId: 'note-1', title: '网页笔记', type: 'video' } } } }
+    }
+    state.fetchData
+      .mockResolvedValueOnce({ code: 0, success: false, data: {}, msg: '' })
+      .mockResolvedValueOnce(`<html><script>window.__INITIAL_STATE__=${JSON.stringify(pageState)}</script></html>`)
+
+    const result = await fetchNoteDetail(options, 'test-cookie', { headers: { [headerName]: userAgent } })
+
+    expect(result.data.data.items[0]?.note_card?.note_id).toBe('note-1')
+    expect(state.fetchData).toHaveBeenCalledTimes(2)
+    for (const [config] of state.fetchData.mock.calls) {
+      expect(config.headers['user-agent']).toBe(userAgent)
+      expect(config.headers['sec-ch-ua']).toBe('"Not_A Brand";v="99", "Chromium";v="149", "Google Chrome";v="149"')
+    }
+  })
 })
