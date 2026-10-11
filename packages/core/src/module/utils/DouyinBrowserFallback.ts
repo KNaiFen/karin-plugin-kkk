@@ -9,6 +9,7 @@ import {
   DOUYIN_ANTI_BOT_HTML_PATTERN,
   type DouyinHtmlWork,
   parseDouyinHtmlWork } from '@/platform/douyin/html'
+import { hasDouyinDirectVideoUrl } from '@/platform/douyin/workType'
 
 import {
   closeBrowserSafely,
@@ -115,10 +116,15 @@ export const waitForDouyinWorkPageReady = async (
 ): Promise<DouyinHtmlWork> => {
   const deadline = Date.now() + timeoutMs
   let lastError: unknown
+  const isReady = (work: DouyinHtmlWork | null | undefined): work is DouyinHtmlWork => {
+    return Boolean(work && (work.subtype !== 'video' || hasDouyinDirectVideoUrl({
+      play_addr: { url_list: [work.video?.playUrl ?? '', ...(work.video?.backupUrls ?? [])] }
+    })))
+  }
 
   while (Date.now() < deadline) {
     const capturedWork = resolveCapturedWork?.()
-    if (capturedWork) {
+    if (isReady(capturedWork)) {
       return capturedWork
     }
 
@@ -134,19 +140,21 @@ export const waitForDouyinWorkPageReady = async (
     }
 
     try {
-      return parseDouyinHtmlWork(html, {
+      const work = parseDouyinHtmlWork(html, {
         awemeId: idData.aweme_id,
         typeHint: idData.typeHint,
         url: page.url?.()
       })
+      if (isReady(work)) return work
+      lastError = new Error('抖音视频页面仅返回包装播放地址，未取得视频直链')
     } catch (error) {
       const fallbackWork = resolveCapturedWork?.()
-      if (fallbackWork) {
+      if (isReady(fallbackWork)) {
         return fallbackWork
       }
       lastError = error
-      await sleep(WORK_PAGE_POLL_INTERVAL_MS)
     }
+    await sleep(WORK_PAGE_POLL_INTERVAL_MS)
   }
 
   const reason = lastError instanceof Error ? `: ${lastError.message}` : ''
@@ -180,7 +188,7 @@ const createDouyinWorkDetailCapture = (
         const responseAwemeId = String(detail.aweme_id ?? '').trim()
         const targetAwemeId = String(idData.aweme_id ?? '').trim()
 
-        if (targetAwemeId && requestAwemeId !== targetAwemeId && responseAwemeId !== targetAwemeId) {
+        if (targetAwemeId && (responseAwemeId || requestAwemeId) !== targetAwemeId) {
           return
         }
 
@@ -446,7 +454,12 @@ const fetchDouyinHtmlWorkByBrowserOnce = async (
 
     await configureRequestBlocking(page, DOUYIN_WORK_DETAIL_BLOCKED_RESOURCE_TYPES)
 
-    const candidateUrls = buildDouyinWorkCandidateUrls(idData)
+    const candidateUrls = Array.from(new Set([
+      ...(!idData.typeHint || idData.typeHint === 'video'
+        ? [`https://www.douyin.com/video/${idData.aweme_id}`]
+        : []),
+      ...buildDouyinWorkCandidateUrls(idData)
+    ]))
       .slice(0, DOUYIN_WORK_BROWSER_FALLBACK_MAX_CANDIDATES)
     let lastError: unknown
 
@@ -468,7 +481,7 @@ const fetchDouyinHtmlWorkByBrowserOnce = async (
           page,
           idData,
           getRemainingAttemptTimeout(),
-          idData.typeHint === 'article' ? detailCapture.getCurrent : undefined
+          detailCapture.getCurrent
         )
       } catch (error) {
         lastError = error

@@ -81,6 +81,7 @@ vi.mock('@/module/utils/DouyinBrowserFallback', () => ({
 
 const { fetchDouyinOneWork } = await import('../src/platform/douyin/oneWork')
 const { getDouyinPlayableVideoUrl } = await import('../src/platform/douyin/workType')
+const { parseDouyinHtmlWork } = await import('../src/platform/douyin/html')
 
 const html = `
   <script>
@@ -191,7 +192,7 @@ describe('fetchDouyinOneWork HTTP html request', () => {
     expect(getDouyinPlayableVideoUrl(result.workData.data.aweme_detail.video)).toBe(directUrl)
   })
 
-  it('persists a recovered trace when html-first data is incomplete and enrichment fails', async () => {
+  it('recovers through the browser when html-first media is incomplete and enrichment fails', async () => {
     const awemeId = '7657916175708779686'
     state.axiosGet.mockResolvedValueOnce({
       data: incompleteHtml.replaceAll('7657916175708779685', awemeId),
@@ -201,8 +202,11 @@ describe('fetchDouyinOneWork HTTP html request', () => {
         }
       }
     })
+    state.fetchDouyinHtmlWorkByBrowser.mockResolvedValueOnce(parseDouyinHtmlWork(
+      html.replaceAll('7657916175708779685', awemeId)
+    ))
 
-    await fetchDouyinOneWork({
+    const result = await fetchDouyinOneWork({
       type: 'one_work',
       aweme_id: awemeId,
       typeHint: 'video',
@@ -214,11 +218,31 @@ describe('fetchDouyinOneWork HTTP html request', () => {
       extra: expect.objectContaining({
         platform: 'douyin',
         stage: 'one_work',
-        recoveryStage: 'html-enrichment-degraded',
+        recoveryStage: 'browser-html-fallback',
         awemeId
       })
     }))
     expect(state.parseWork).toHaveBeenCalledTimes(1)
+    expect(state.fetchDouyinHtmlWorkByBrowser).toHaveBeenCalledTimes(1)
+    expect(result.source).toBe('browser')
+    expect(getDouyinPlayableVideoUrl(result.workData.data.aweme_detail.video)).toBe('https://example.com/video.mp4')
+  })
+
+  it('does not cache wrappers after failed detail enrichment and failed browser recovery', async () => {
+    const awemeId = '7681623817793342772'
+    const wrapperUrl = 'https://aweme.snssdk.com/aweme/v1/playwm/?video_id=v02033g10000dad9obnog65v0t8thf60&ratio=720p&line=0'
+    const wrapperHtml = html.replaceAll('7657916175708779685', awemeId)
+      .replace('https://example.com/video.mp4', wrapperUrl)
+    state.axiosGet.mockResolvedValue({ data: wrapperHtml })
+    state.fetchDouyinHtmlWorkByBrowser.mockRejectedValue(new Error('等待 Douyin 浏览器页面 HTML 解析超时'))
+    const idData = { type: 'one_work', aweme_id: awemeId, typeHint: 'video' } as const
+
+    await expect(fetchDouyinOneWork(idData)).rejects.toThrow('等待 Douyin 浏览器页面 HTML 解析超时')
+    await expect(fetchDouyinOneWork(idData)).rejects.toThrow('等待 Douyin 浏览器页面 HTML 解析超时')
+
+    expect(state.axiosGet).toHaveBeenCalledTimes(2)
+    expect(state.parseWork).toHaveBeenCalledTimes(2)
+    expect(state.fetchDouyinHtmlWorkByBrowser).toHaveBeenCalledTimes(2)
   })
 
   it('uses the hidden page audio for note bgm without requesting detail enrichment', async () => {

@@ -406,16 +406,20 @@ const loadDouyinOneWork = async (idData: DouyinIdData): Promise<DouyinOneWorkFet
     }
     const enrichment = shouldEnrich
       ? await tryFetchDouyinWorkEnrichment(htmlWork.awemeId, {
-        persistRecoveredTrace: true,
+        persistRecoveredTrace: htmlWork.subtype !== 'video',
         recoveryStage: 'html-enrichment-degraded',
         transientCookieHeader: mergePublicCookieHeaders(idData.transientCookieHeader, transientCookieHeader),
         referer: finalUrl
       })
       : null
+    const workData = mergeDouyinWorkResults(baseWorkData, enrichment)
+    if (htmlWork.subtype === 'video' && !hasDouyinDirectVideoUrl(workData.data.aweme_detail.video)) {
+      throw new Error('抖音分享页与详情补充均未取得视频直链')
+    }
 
     return {
       htmlWork,
-      workData: mergeDouyinWorkResults(baseWorkData, enrichment),
+      workData,
       source: 'html',
       enrichment
     }
@@ -459,7 +463,7 @@ const loadDouyinOneWork = async (idData: DouyinIdData): Promise<DouyinOneWorkFet
       }
     }
 
-    logger.warn(`[Douyin] HTML 主链网络获取失败，尝试浏览器 HTML 兜底: ${error instanceof Error ? error.message : String(error)}`)
+    logger.warn(`[Douyin] HTTP 主链未取得完整作品数据，尝试浏览器兜底: ${error instanceof Error ? error.message : String(error)}`)
     recordFailureTraceStep('douyin.work.fetch.browser.html.start', {
       awemeId: idData.aweme_id
     })
@@ -511,7 +515,7 @@ export const fetchDouyinOneWork = async (idData: DouyinIdData): Promise<DouyinOn
 
   const { value } = await resolveSharedJsonCache({
     scope: 'work-bundle',
-    key: `douyin:one_work:v5:${awemeId}`
+    key: `douyin:one_work:v6:${awemeId}`
   }, async () => await loadDouyinOneWork(idData))
 
   return value
