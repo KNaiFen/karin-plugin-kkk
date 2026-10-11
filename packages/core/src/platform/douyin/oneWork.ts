@@ -20,7 +20,7 @@ import {
   mergeDouyinWorkResults,
   parseDouyinHtmlWork
 } from './html'
-import { resolveDouyinPlayableMusicUrls } from './workType'
+import { hasDouyinDirectVideoUrl, resolveDouyinPlayableMusicUrls } from './workType'
 
 export type DouyinOneWorkFetchResult = {
   htmlWork: DouyinHtmlWork
@@ -285,7 +285,7 @@ const shouldAttemptDouyinWorkEnrichment = (
 
   switch (htmlWork.subtype) {
     case 'video':
-      return !hasRenderableDouyinVideo(aweme.video)
+      return !hasDouyinDirectVideoUrl(aweme.video)
     case 'article':
       return !(
         typeof aweme.article_info?.article_title === 'string' &&
@@ -511,7 +511,7 @@ export const fetchDouyinOneWork = async (idData: DouyinIdData): Promise<DouyinOn
 
   const { value } = await resolveSharedJsonCache({
     scope: 'work-bundle',
-    key: `douyin:one_work:v4:${awemeId}`
+    key: `douyin:one_work:v5:${awemeId}`
   }, async () => await loadDouyinOneWork(idData))
 
   return value

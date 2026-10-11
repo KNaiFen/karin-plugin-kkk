@@ -223,8 +223,8 @@ describe('downloadVideo preflight policy', () => {
     expect(state.downloadCalls).toEqual(['https://cdn.example/video.mp4'])
   })
 
-  it('does not let failed preflight block douyin wrapped video downloads', async () => {
-    const wrappedUrl = 'https://aweme.snssdk.com/aweme/v1/playwm/?line=0&logo_name=aweme_diversion_search&ratio=720p&video_id=v1e00fgi0000d7f5g1fog65jfn7cv8c0'
+  it.each(['play', 'playwm'])('does not let failed preflight block douyin %s downloads', async (endpoint) => {
+    const wrappedUrl = `https://aweme.snssdk.com/aweme/v1/${endpoint}/?line=0&logo_name=aweme_diversion_search&ratio=720p&video_id=v1e00fgi0000d7f5g1fog65jfn7cv8c0`
     state.failingHeaderUrls = new Set([wrappedUrl])
 
     const event = createEvent()

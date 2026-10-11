@@ -80,6 +80,7 @@ vi.mock('@/module/utils/DouyinBrowserFallback', () => ({
 }))
 
 const { fetchDouyinOneWork } = await import('../src/platform/douyin/oneWork')
+const { getDouyinPlayableVideoUrl } = await import('../src/platform/douyin/workType')
 
 const html = `
   <script>
@@ -137,6 +138,57 @@ describe('fetchDouyinOneWork HTTP html request', () => {
 
     expect(state.parseWork).not.toHaveBeenCalled()
     expect(state.persistFailureTrace).not.toHaveBeenCalled()
+  })
+
+  it('replaces obsolete share-page wrappers with detail CDN sources before choosing download quality', async () => {
+    const awemeId = '7681623817793342771'
+    const mediaId = 'v02033g10000dad9obnog65v0t8thf60'
+    const wrapperUrl = `https://aweme.snssdk.com/aweme/v1/playwm/?video_id=${mediaId}&ratio=720p&line=0`
+    const directUrl = 'https://example.com/detail-video.mp4'
+    const video = {
+      duration: 19343,
+      width: 720,
+      height: 1280,
+      play_addr: { uri: mediaId, url_list: [wrapperUrl], width: 720, height: 1280 },
+      cover: { url_list: ['https://example.com/cover.jpg'] }
+    }
+    const item = {
+      aweme_id: awemeId,
+      aweme_type: 0,
+      desc: '分享页标题',
+      share_url: `https://m.douyin.com/share/video/${awemeId}`,
+      author: { nickname: '作者' },
+      statistics: { digg_count: 1 },
+      video
+    }
+    const detailVideo = {
+      ...video,
+      play_addr: { ...video.play_addr, url_list: [directUrl] },
+      bit_rate: [{
+        format: 'mp4',
+        FPS: 30,
+        gear_name: 'h264_720',
+        play_addr: { ...video.play_addr, url_list: [directUrl], data_size: 1234567 }
+      }]
+    }
+    state.axiosGet.mockResolvedValueOnce({
+      data: `<script>window._ROUTER_DATA = ${JSON.stringify({
+        loaderData: { 'video_(id)/page': { videoInfoRes: { item_list: [item] } } }
+      })}</script>`
+    })
+    state.parseWork.mockResolvedValueOnce({
+      data: { aweme_detail: { ...item, desc: '详情标题', video: detailVideo } }
+    })
+
+    const result = await fetchDouyinOneWork({
+      type: 'one_work', aweme_id: awemeId, typeHint: 'video'
+    })
+
+    expect(state.parseWork).toHaveBeenCalledTimes(1)
+    expect(state.fetchDouyinHtmlWorkByBrowser).not.toHaveBeenCalled()
+    expect(result.workData.data.aweme_detail.desc).toBe('分享页标题')
+    expect(result.workData.data.aweme_detail.video.bit_rate).toEqual(detailVideo.bit_rate)
+    expect(getDouyinPlayableVideoUrl(result.workData.data.aweme_detail.video)).toBe(directUrl)
   })
 
   it('persists a recovered trace when html-first data is incomplete and enrichment fails', async () => {

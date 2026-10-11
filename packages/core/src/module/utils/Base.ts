@@ -74,7 +74,7 @@ type CompletedDownloadResult = SharedDownloadResult & {
   completedAt: number
 }
 
-const DOUYIN_WRAPPED_VIDEO_PATH_PATTERN = /^\/aweme\/v1\/playwm?\/?$/i
+const DOUYIN_WRAPPED_VIDEO_PATH_PATTERN = /^\/aweme\/v1\/play(?:wm)?\/?$/i
 
 const isDouyinWrappedVideoDownloadUrl = (value: string): boolean => {
   if (!value) return false

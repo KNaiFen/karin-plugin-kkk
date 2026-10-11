@@ -9,6 +9,7 @@ import type {
 import { parseDouyinArticleContentValue } from './articleContent'
 import type { DouyinIdData } from './getID'
 import {
+  hasDouyinDirectVideoUrl,
   normalizeDouyinVideoUri,
   resolveDouyinPlayableMusicUrls,
   resolveDouyinPlayableVideoUrls
@@ -1127,6 +1128,12 @@ export const mergeDouyinWorkResults = (
   if (!enrichment?.data?.aweme_detail) return base
 
   const mergedAweme = mergeNested(base.data.aweme_detail, enrichment.data.aweme_detail)
+  const baseVideo = base.data.aweme_detail.video
+  const enrichmentVideo = enrichment.data.aweme_detail.video
+  // 分享页的包装地址可能已失效；详情直链及其码率、大小应一起进入下载流程。
+  if (!hasDouyinDirectVideoUrl(baseVideo) && hasDouyinDirectVideoUrl(enrichmentVideo)) {
+    mergedAweme.video = mergeNested(enrichmentVideo, baseVideo)
+  }
   const baseArticleInfo = (base.data.aweme_detail as Record<string, any>)?.article_info
   const enrichmentArticleInfo = (enrichment.data.aweme_detail as Record<string, any>)?.article_info
 

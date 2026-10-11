@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getDouyinPlayableVideoUrl, getDouyinShareableVideoUrl, resolveDouyinPlayableVideoUrls } from '../src/platform/douyin/workType'
+import { getDouyinPlayableVideoUrl, getDouyinShareableVideoUrl, isDouyinWrappedVideoUrl, resolveDouyinPlayableVideoUrls } from '../src/platform/douyin/workType'
 
 describe('Douyin video url helpers', () => {
   it('prefers direct playable urls when downloading', () => {
@@ -44,9 +44,9 @@ describe('Douyin video url helpers', () => {
     )
   })
 
-  it('unwraps broken aweme wrapper urls whose video_id is already an absolute cdn url', () => {
+  it.each(['play', 'playwm'])('unwraps %s urls whose video_id is already an absolute cdn url', (endpoint) => {
     const directUrl = 'https://sf6-cdn-tos.douyinstatic.com/obj/tos-cn-ve-2774/oA1uoDVLXAUIrBiszAxMNjNQBCWmwvfELEYBi3'
-    const wrappedUrl = `${'https://aweme.snssdk.com/aweme/v1/playwm/?video_id='}${directUrl}&ratio=720p&line=0`
+    const wrappedUrl = `https://aweme.snssdk.com/aweme/v1/${endpoint}/?video_id=${directUrl}&ratio=720p&line=0`
     const video = {
       play_addr: {
         uri: directUrl,
@@ -61,6 +61,19 @@ describe('Douyin video url helpers', () => {
 
     expect(getDouyinPlayableVideoUrl(video as any)).toBe(directUrl)
     expect(getDouyinShareableVideoUrl(video as any)).toBe(directUrl)
+  })
+
+  it('keeps signed CDN urls ahead of both play and playwm wrappers', () => {
+    const playUrl = 'https://aweme.snssdk.com/aweme/v1/play/?video_id=video-id'
+    const playwmUrl = 'https://aweme.snssdk.com/aweme/v1/playwm/?video_id=video-id'
+    const directUrl = 'https://example.com/video.mp4'
+    const urls = resolveDouyinPlayableVideoUrls({
+      play_addr: { url_list: [playUrl, playwmUrl, directUrl] }
+    })
+
+    expect(urls).toEqual([directUrl, playUrl, playwmUrl])
+    expect(isDouyinWrappedVideoUrl(playUrl)).toBe(true)
+    expect(isDouyinWrappedVideoUrl(playwmUrl)).toBe(true)
   })
 
   it('prefers a synthesized play wrapper when only playwm urls and a stable media uri are available', () => {

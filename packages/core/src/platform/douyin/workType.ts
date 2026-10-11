@@ -234,7 +234,7 @@ export function needsSpecialImageProcessing(
 }
 
 const ABSOLUTE_URL_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i
-const DOUYIN_WRAPPED_VIDEO_PATH_PATTERN = /^\/aweme\/v1\/playwm?\/?$/i
+const DOUYIN_WRAPPED_VIDEO_PATH_PATTERN = /^\/aweme\/v1\/play(?:wm)?\/?$/i
 
 const toTrimmedString = (value: unknown): string => {
   return typeof value === 'string' ? value.trim() : ''
@@ -357,11 +357,11 @@ export function resolveDouyinPlayableVideoUrls (video?: DouyinVideoLike | null):
     : []
 
   const rawCandidates = [
+    ...wrappedUrlCandidates,
     ...bitrateUrlCandidates,
     ...toStringArray(video?.play_addr_h264?.url_list),
     ...toStringArray(video?.play_addr?.url_list),
     ...directUriCandidates,
-    ...wrappedUrlCandidates,
     normalizeDirectAbsoluteUri(video?.play_addr_h264?.uri),
     normalizeDirectAbsoluteUri(video?.play_addr?.uri)
   ]
@@ -371,6 +371,10 @@ export function resolveDouyinPlayableVideoUrls (video?: DouyinVideoLike | null):
       .map(candidate => normalizeDouyinPlayableVideoUrl(candidate))
       .filter(Boolean)
   )
+}
+
+export function hasDouyinDirectVideoUrl (video?: DouyinVideoLike | null): boolean {
+  return resolveDouyinPlayableVideoUrls(video).some(url => !isDouyinWrappedVideoUrl(url))
 }
 
 /**

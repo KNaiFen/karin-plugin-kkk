@@ -179,7 +179,7 @@ describe('fetchDouyinOneWork shared bundle cache', () => {
     expect(state.parseWork).toHaveBeenCalledTimes(0)
     expect(state.fetchBrowserHtmlWork).toHaveBeenCalledTimes(1)
     expect(Array.from(state.files.keys())).toContain(
-      '/tmp/shared-cache/work-bundle/douyin_one_work_v4_718181.json'
+      '/tmp/shared-cache/work-bundle/douyin_one_work_v5_718181.json'
     )
   })
 })
