@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   axiosGet: vi.fn(),
   fetchDouyinHtmlWorkByBrowser: vi.fn(),
   parseWork: vi.fn(),
+  resolveDouyinDownloadUrlCandidates: vi.fn(),
   logger: {
     warn: vi.fn(),
     info: vi.fn(),
@@ -79,6 +80,10 @@ vi.mock('@/module/utils/DouyinBrowserFallback', () => ({
   fetchDouyinHtmlWorkByBrowser: (...args: unknown[]) => state.fetchDouyinHtmlWorkByBrowser(...args)
 }))
 
+vi.mock('../src/platform/douyin/downloadUrls', () => ({
+  resolveDouyinDownloadUrlCandidates: (...args: unknown[]) => state.resolveDouyinDownloadUrlCandidates(...args)
+}))
+
 const { fetchDouyinOneWork } = await import('../src/platform/douyin/oneWork')
 const { getDouyinPlayableVideoUrl } = await import('../src/platform/douyin/workType')
 const { parseDouyinHtmlWork } = await import('../src/platform/douyin/html')
@@ -100,6 +105,7 @@ describe('fetchDouyinOneWork HTTP html request', () => {
     vi.clearAllMocks()
     state.douyinCookie = ''
     state.parseWork.mockRejectedValue(new Error('skip enrichment'))
+    state.resolveDouyinDownloadUrlCandidates.mockResolvedValue({ videoUrl: '', backupUrls: [] })
     state.axiosGet.mockResolvedValue({
       data: html,
       request: {
@@ -192,6 +198,40 @@ describe('fetchDouyinOneWork HTTP html request', () => {
     expect(getDouyinPlayableVideoUrl(result.workData.data.aweme_detail.video)).toBe(directUrl)
   })
 
+  it('recovers a working share-page wrapper when detail enrichment fails', async () => {
+    const awemeId = '7705782767266612453'
+    const wrapperUrl = 'https://aweme.snssdk.com/aweme/v1/playwm/?video_id=v2700fgi0000dbo6vgfog65sjmoqrr6g&ratio=720p&line=0'
+    const directUrl = 'https://example.com/recovered-video.mp4'
+    const item = {
+      aweme_id: awemeId, aweme_type: 4, desc: '视频标题',
+      author: { nickname: '作者' }, statistics: { digg_count: 1 },
+      video: {
+        duration: 13034, width: 2560, height: 1440, bit_rate: null,
+        play_addr: { uri: 'v2700fgi0000dbo6vgfog65sjmoqrr6g', url_list: [wrapperUrl] },
+        cover: { url_list: ['https://example.com/cover.jpg'] }
+      }
+    }
+    const page = `<script>window._ROUTER_DATA = ${JSON.stringify({
+      loaderData: { 'video_(id)/page': { videoInfoRes: { item_list: [item] } } }
+    })}</script>`
+    state.axiosGet.mockResolvedValueOnce({ data: page })
+    state.resolveDouyinDownloadUrlCandidates.mockResolvedValueOnce({
+      videoUrl: directUrl, backupUrls: [wrapperUrl]
+    })
+
+    const result = await fetchDouyinOneWork({ type: 'one_work', aweme_id: awemeId, typeHint: 'video' })
+
+    expect(state.parseWork).toHaveBeenCalledTimes(1)
+    expect(state.resolveDouyinDownloadUrlCandidates).toHaveBeenCalledWith(
+      expect.any(Object), expect.objectContaining({ networkOptions: { proxy: false } })
+    )
+    expect(state.fetchDouyinHtmlWorkByBrowser).not.toHaveBeenCalled()
+    expect(result.source).toBe('html')
+    expect(result.htmlWork.video?.playUrl).toBe(directUrl)
+    expect(getDouyinPlayableVideoUrl(result.workData.data.aweme_detail.video)).toBe(directUrl)
+    expect(result.workData.data.aweme_detail.video.bit_rate[0].play_addr.url_list[0]).toBe(directUrl)
+  })
+
   it('recovers through the browser when html-first media is incomplete and enrichment fails', async () => {
     const awemeId = '7657916175708779686'
     state.axiosGet.mockResolvedValueOnce({
@@ -234,6 +274,7 @@ describe('fetchDouyinOneWork HTTP html request', () => {
     const wrapperHtml = html.replaceAll('7657916175708779685', awemeId)
       .replace('https://example.com/video.mp4', wrapperUrl)
     state.axiosGet.mockResolvedValue({ data: wrapperHtml })
+    state.resolveDouyinDownloadUrlCandidates.mockResolvedValue({ videoUrl: wrapperUrl, backupUrls: [] })
     state.fetchDouyinHtmlWorkByBrowser.mockRejectedValue(new Error('等待 Douyin 浏览器页面 HTML 解析超时'))
     const idData = { type: 'one_work', aweme_id: awemeId, typeHint: 'video' } as const
 

@@ -8,6 +8,7 @@ import { persistFailureTrace, recordFailureTraceStep } from '@/module/utils/Erro
 import { buildConfiguredRequestOptions } from '@/module/utils/RequestConfig'
 import { resolveSharedJsonCache } from '@/module/utils/sharedCache'
 
+import { resolveDouyinDownloadUrlCandidates } from './downloadUrls'
 import type { DouyinIdData } from './getID'
 import {
   buildDouyinHtmlWorkFromAwemeDetail,
@@ -20,7 +21,7 @@ import {
   mergeDouyinWorkResults,
   parseDouyinHtmlWork
 } from './html'
-import { hasDouyinDirectVideoUrl, resolveDouyinPlayableMusicUrls } from './workType'
+import { hasDouyinDirectVideoUrl, isDouyinWrappedVideoUrl, resolveDouyinPlayableMusicUrls } from './workType'
 
 export type DouyinOneWorkFetchResult = {
   htmlWork: DouyinHtmlWork
@@ -412,9 +413,23 @@ const loadDouyinOneWork = async (idData: DouyinIdData): Promise<DouyinOneWorkFet
         referer: finalUrl
       })
       : null
-    const workData = mergeDouyinWorkResults(baseWorkData, enrichment)
+    let workData = mergeDouyinWorkResults(baseWorkData, enrichment)
     if (htmlWork.subtype === 'video' && !hasDouyinDirectVideoUrl(workData.data.aweme_detail.video)) {
-      throw new Error('抖音分享页与详情补充均未取得视频直链')
+      const candidates = await resolveDouyinDownloadUrlCandidates(workData.data.aweme_detail.video, {
+        headers: buildDouyinEnrichmentRequestHeaders({
+          transientCookieHeader: mergePublicCookieHeaders(idData.transientCookieHeader, transientCookieHeader),
+          referer: finalUrl
+        }),
+        networkOptions: { proxy: false },
+        logContext: `作品 ${idData.aweme_id} 主视频恢复`
+      })
+      if (!htmlWork.video || !candidates.videoUrl || isDouyinWrappedVideoUrl(candidates.videoUrl)) {
+        throw new Error('抖音分享页与详情补充均未取得视频直链')
+      }
+
+      htmlWork.video.playUrl = candidates.videoUrl
+      htmlWork.video.backupUrls = candidates.backupUrls
+      workData = mergeDouyinWorkResults(workData, buildDouyinWorkResultFromHtmlWork(htmlWork))
     }
 
     return {

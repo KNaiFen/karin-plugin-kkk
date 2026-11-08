@@ -1,7 +1,7 @@
 import { logger } from 'node-karin'
 import type { AxiosRequestConfig } from 'node-karin/axios'
 
-import { Networks } from '@/module/utils'
+import { Network as Networks } from '@/module/utils/Network/Network'
 
 import { isDouyinWrappedVideoUrl, resolveDouyinPlayableVideoUrls } from './workType'
 
